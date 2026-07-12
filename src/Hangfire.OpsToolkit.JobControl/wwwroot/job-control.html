@@ -1,0 +1,810 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hangfire Job Control — Recurring Jobs</title>
+<style>
+  /* Plenti Design System tokens (colors_and_type.css), inlined — this page ships as a single
+     embedded HTML resource with no external asset dependencies (see the csproj comment), so
+     no webfont/icon-CDN loading here; system font stack + inline SVG icons only. */
+  :root {
+    --navy: #002a61; --navy-hover: #05244d;
+    --secondary-blue: #3c66ff; --secondary-blue-hover: #0b36d2;
+    --positive-bg: #e9fcd4; --positive-text: #315e00;
+    --warning-bg: #fff0d9; --warning-border: #e4b774; --warning-text: #623b02;
+    --danger-bg: #fae4e4; --danger-border: #eeafaf; --danger-text: #9e0202;
+    --info-bg: #cfe0f7; --info-text: #0045a5;
+    --surface: #f1f2f4; --hairline: #dbdde1; --disabled-fg: #babec5;
+    --text-tertiary: #5d656f; --text-secondary: #2e3238; --text-primary: #0c0d0e;
+    --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+    --shadow-card: 0 1px 2px rgba(12,13,14,0.07), 0 1px 1px rgba(12,13,14,0.04);
+    --shadow-dropdown: 0 8px 24px rgba(12,13,14,0.16);
+    --shadow-dialog: 0 20px 56px rgba(12,13,14,0.24);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; background: var(--surface); color: var(--text-primary);
+    font-family: -apple-system, "Segoe UI", Roboto, sans-serif; -webkit-font-smoothing: antialiased;
+  }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: var(--hairline); border-radius: 999px; border: 3px solid transparent; background-clip: padding-box; }
+  button { font-family: inherit; cursor: pointer; }
+  code { font-family: var(--mono); }
+  @keyframes drwr { from { transform: translateX(24px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+  @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes toastin { from { transform: translate(-50%, 12px); opacity: 0; } to { transform: translate(-50%, 0); opacity: 1; } }
+  @keyframes pop { from { transform: scale(0.97); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+  header.topbar {
+    position: sticky; top: 0; z-index: 20; background: #fff; border-bottom: 1px solid var(--hairline);
+    height: 56px; display: flex; align-items: center; padding: 0 24px;
+  }
+  header.topbar h1 { font-weight: 300; font-size: 17px; letter-spacing: -0.01em; margin: 0; }
+
+  main { max-width: 1200px; margin: 0 auto; padding: 32px 24px 96px; }
+
+  .page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; flex-wrap: wrap; margin-bottom: 24px; }
+  .page-head h2 { font-weight: 300; font-size: 30px; line-height: 1.2; letter-spacing: -0.03em; margin: 0; }
+  .page-head .subtitle { margin: 6px 0 0; font-size: 14px; color: var(--text-tertiary); }
+  .head-actions { display: flex; align-items: center; gap: 10px; }
+  .search-box { display: flex; align-items: center; height: 40px; padding: 0 14px; gap: 8px; background: #fff; border: 1px solid var(--hairline); border-radius: 999px; min-width: 240px; }
+  .search-box svg { color: var(--text-tertiary); }
+  .search-box input { flex: 1; border: none; outline: none; background: transparent; font: inherit; font-size: 14px; color: var(--text-primary); }
+  .btn-outline-navy { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 18px; border: none; box-shadow: inset 0 0 0 1.5px var(--navy); background: transparent; color: var(--navy); border-radius: 999px; font-weight: 600; font-size: 14px; }
+  .btn-outline-navy:hover { background: rgba(0,42,97,0.06); }
+
+  .banner { display: flex; gap: 14px; align-items: flex-start; background: var(--warning-bg); border: 1px solid var(--warning-border); border-radius: 12px; padding: 16px 18px; margin-bottom: 20px; }
+  .banner-title { font-size: 14px; font-weight: 600; color: var(--warning-text); }
+  .banner-body { font-size: 13px; color: var(--text-secondary); margin-top: 3px; line-height: 1.5; }
+  .banner-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .banner-chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; background: #fff; border: 1px solid var(--warning-border); border-radius: 999px; font-size: 12px; font-weight: 600; color: var(--text-primary); white-space: nowrap; }
+  .banner-chip:hover { background: var(--warning-bg); }
+
+  .filters { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+  .filter-chip { display: inline-flex; align-items: center; gap: 7px; height: 34px; padding: 0 14px; border-radius: 999px; font-weight: 600; font-size: 13px; border: 1px solid var(--hairline); background: #fff; color: var(--text-secondary); }
+  .filter-chip:hover { background: var(--surface); }
+  .filter-chip .count { font-size: 12px; color: var(--text-tertiary); }
+  .filter-chip.active { border: none; background: var(--navy); color: #fff; }
+  .filter-chip.active .count { color: #fff; opacity: 0.7; }
+
+  .table-card { background: #fff; border: 1px solid var(--hairline); border-radius: 14px; box-shadow: var(--shadow-card); overflow: hidden; }
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; padding: 13px 18px; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-tertiary); font-weight: 600; border-bottom: 1px solid var(--hairline); white-space: nowrap; }
+  td { padding: 14px 18px; vertical-align: middle; border-bottom: 1px solid var(--hairline); }
+  tbody tr { cursor: pointer; }
+  tbody tr:hover { background: var(--surface); }
+  tbody tr:last-child td { border-bottom: none; }
+  .job-cell { display: flex; align-items: center; gap: 9px; }
+  .job-dot { width: 8px; height: 8px; border-radius: 999px; flex-shrink: 0; }
+  .job-id { font-size: 14px; font-weight: 600; }
+  .job-method { font-family: var(--mono); font-size: 11.5px; color: var(--text-tertiary); margin-top: 2px; }
+  code.cron-chip { font-size: 12.5px; background: var(--surface); padding: 2px 7px; border-radius: 5px; }
+  .cron-human { font-size: 12px; color: var(--text-tertiary); margin-top: 4px; }
+  .next-run-main { font-size: 13.5px; }
+  .next-run-abs { font-size: 11.5px; color: var(--text-tertiary); margin-top: 2px; }
+  .will-skip { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; color: var(--warning-text); font-weight: 600; margin-top: 2px; }
+  .last-none { font-size: 13px; color: var(--text-tertiary); font-style: italic; }
+  .last-ok { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; white-space: nowrap; }
+  .last-fail { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; color: var(--danger-text); font-weight: 600; white-space: nowrap; }
+  .last-abs { font-size: 11.5px; color: var(--text-tertiary); margin-top: 2px; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 11px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+  .pill-positive { background: var(--positive-bg); color: var(--positive-text); }
+  .pill-warning { background: var(--warning-bg); color: var(--warning-text); }
+  .pill-sub { font-size: 11px; color: var(--text-tertiary); margin-top: 4px; }
+  .actions-cell { position: relative; white-space: nowrap; text-align: right; }
+  .actions-inline { display: inline-flex; align-items: center; gap: 6px; }
+  .btn-ghost-ring { height: 32px; padding: 0 14px; border: none; box-shadow: inset 0 0 0 1.5px var(--hairline); background: transparent; color: var(--text-secondary); border-radius: 999px; font-weight: 600; font-size: 13px; }
+  .btn-ghost-ring:hover { box-shadow: inset 0 0 0 1.5px var(--warning-border); color: var(--warning-text); }
+  .btn-navy-fill { height: 32px; padding: 0 16px; border: none; background: var(--navy); color: #fff; border-radius: 999px; font-weight: 600; font-size: 13px; }
+  .btn-navy-fill:hover { background: var(--navy-hover); }
+  .kebab-btn { width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; border: none; background: transparent; border-radius: 8px; color: var(--text-secondary); }
+  .kebab-btn:hover { background: rgba(12,13,14,0.06); }
+  .kebab-menu { position: absolute; top: 48px; right: 14px; z-index: 40; min-width: 190px; background: #fff; border: 1px solid var(--hairline); border-radius: 10px; box-shadow: var(--shadow-dropdown); padding: 6px; animation: pop 0.12s ease-out; }
+  .kebab-item { width: 100%; display: flex; align-items: center; gap: 11px; padding: 9px 11px; border: none; background: transparent; border-radius: 7px; font-size: 13.5px; color: var(--text-primary); text-align: left; }
+  .kebab-item:hover { background: var(--surface); }
+  .kebab-item.danger { color: var(--danger-text); }
+  .kebab-item.danger:hover { background: var(--danger-bg); }
+  .kebab-divider { height: 1px; background: var(--hairline); margin: 5px 3px; }
+  .menu-overlay { position: fixed; inset: 0; z-index: 30; }
+  .empty-state { padding: 56px 24px; text-align: center; color: var(--text-tertiary); }
+  .footnote { font-size: 12px; color: var(--text-tertiary); margin-top: 16px; line-height: 1.6; max-width: 760px; }
+
+  .activity-card { margin-top: 20px; }
+  .activity-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 18px; cursor: pointer; }
+  .activity-head-title { display: flex; align-items: center; gap: 9px; font-weight: 600; font-size: 14px; }
+  .activity-filter-note { font-weight: 400; color: var(--text-tertiary); }
+  .activity-filter-note code.cron-chip { margin: 0 2px; }
+  .activity-body td { font-size: 13px; }
+  .activity-reason { color: var(--text-tertiary); max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pill-neutral { background: var(--surface); color: var(--text-secondary); }
+  #status { color: var(--text-tertiary); font-size: 13px; margin-bottom: 12px; }
+  #load-error { color: var(--danger-text); font-size: 13px; margin-bottom: 12px; }
+
+  .scrim { position: fixed; inset: 0; z-index: 50; background: rgba(12,13,14,0.28); animation: fade 0.18s ease-out; }
+  .drawer { position: fixed; top: 0; right: 0; bottom: 0; z-index: 51; width: min(560px, 100vw); background: #fff; box-shadow: var(--shadow-dialog); display: flex; flex-direction: column; animation: drwr 0.22s ease-out; }
+  .drawer-head { padding: 22px 26px 0; }
+  .drawer-title-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+  .drawer-title { font-weight: 300; font-size: 22px; letter-spacing: -0.02em; margin: 0; }
+  .drawer-method { font-family: var(--mono); font-size: 12px; color: var(--text-tertiary); margin-top: 6px; }
+  .drawer-close { width: 36px; height: 36px; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; border: none; background: var(--surface); border-radius: 999px; color: var(--text-secondary); }
+  .drawer-close:hover { background: var(--hairline); }
+  .tabs { display: flex; gap: 4px; margin-top: 20px; border-bottom: 1px solid var(--hairline); }
+  .tab-btn { padding: 10px 14px; border: none; background: transparent; border-bottom: 2px solid transparent; color: var(--text-tertiary); font-weight: 600; font-size: 13.5px; margin-bottom: -1px; display: flex; align-items: center; gap: 6px; }
+  .tab-btn.active { border-bottom-color: var(--navy); color: var(--navy); }
+  .tab-btn.disabled { cursor: default; }
+  .tab-soon { font-size: 9px; font-weight: 600; padding: 1px 6px; border-radius: 999px; background: var(--surface); color: var(--text-tertiary); }
+  .drawer-body { flex: 1; overflow-y: auto; padding: 22px 26px 32px; }
+  .callout-warning { display: flex; gap: 12px; background: var(--warning-bg); border: 1px solid var(--warning-border); border-radius: 10px; padding: 13px 15px; margin-bottom: 20px; }
+  .callout-warning .title { font-weight: 600; color: var(--warning-text); font-size: 13px; }
+  .callout-warning .body { color: var(--text-secondary); margin-top: 3px; font-size: 13px; }
+  dl.def-list { margin: 0; display: grid; grid-template-columns: 132px 1fr; }
+  dl.def-list > div { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; padding: 11px 0; border-bottom: 1px solid var(--surface); }
+  dl.def-list > div:last-child { border-bottom: none; }
+  dl.def-list dt { font-size: 13px; color: var(--text-tertiary); }
+  dl.def-list dd { margin: 0; font-size: 13.5px; word-break: break-word; }
+  .drawer-action-row { display: flex; gap: 10px; margin-top: 22px; }
+  .drawer-section-title { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 13.5px; color: var(--text-secondary); margin: 26px 0 12px; }
+  .drawer-history-table { border: 1px solid var(--hairline); border-radius: 10px; overflow: hidden; }
+  .drawer-history-table th, .drawer-history-table td { padding: 9px 10px; }
+  .drawer-history-table .activity-reason { max-width: 90px; }
+
+  .modal-scrim { position: fixed; inset: 0; z-index: 60; background: rgba(12,13,14,0.32); display: flex; align-items: center; justify-content: center; padding: 24px; animation: fade 0.15s ease-out; }
+  .modal-box { width: min(460px, 100%); background: #fff; border-radius: 16px; box-shadow: var(--shadow-dialog); padding: 26px; animation: pop 0.16s ease-out; }
+  .modal-head { display: flex; gap: 14px; align-items: flex-start; }
+  .modal-icon { width: 42px; height: 42px; border-radius: 999px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .modal-title { font-weight: 300; font-size: 21px; letter-spacing: -0.02em; margin: 0; }
+  .modal-body-text { font-size: 13.5px; color: var(--text-secondary); line-height: 1.55; margin: 8px 0 0; }
+  .modal-body-text b { color: var(--text-primary); }
+  .reason-label { font-size: 13px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px; }
+  textarea.reason-input { width: 100%; padding: 11px 13px; border: 1px solid var(--hairline); border-radius: 8px; font: inherit; font-size: 14px; color: var(--text-primary); outline: none; resize: vertical; line-height: 1.5; }
+  textarea.reason-input:focus { border-color: var(--navy); box-shadow: 0 0 0 3px rgba(0,42,97,0.12); }
+  .modal-error { color: var(--danger-text); font-size: 12.5px; margin-top: 10px; }
+  .modal-footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+  .btn-text { height: 42px; padding: 0 20px; border: none; background: transparent; color: var(--text-secondary); border-radius: 999px; font-weight: 600; font-size: 14px; }
+  .btn-text:hover { background: var(--surface); }
+  .btn-warning-fill { height: 42px; padding: 0 22px; border: none; background: var(--warning-text); color: #fff; border-radius: 999px; font-weight: 600; font-size: 14px; }
+  .btn-warning-fill:hover { background: #4a2d01; }
+  .btn-warning-fill:disabled { background: var(--hairline); color: var(--disabled-fg); cursor: not-allowed; }
+  .btn-danger-fill { height: 42px; padding: 0 22px; border: none; background: var(--danger-text); color: #fff; border-radius: 999px; font-weight: 600; font-size: 14px; }
+  .btn-danger-fill:hover { background: #7a0101; }
+
+  .toast { position: fixed; bottom: 24px; left: 50%; z-index: 70; display: flex; align-items: center; gap: 11px; background: #0c0d0e; color: #fff; padding: 13px 20px; border-radius: 999px; box-shadow: var(--shadow-dialog); font-size: 13.5px; font-weight: 500; animation: toastin 0.2s ease-out; max-width: 90vw; }
+</style>
+</head>
+<body>
+<header class="topbar"><h1>Job control — Recurring jobs</h1></header>
+<main><div id="app"></div></main>
+
+<script>
+(function () {
+  // Replaced server-side by MapJobControlUi — the host's API base for list/disable/enable/trigger/delete.
+  // See Hangfire.OpsToolkit.JobControl.JobControlEndpoints.DefaultApiBase.
+  var API_BASE = "{{API_BASE}}";
+  var MIN = 60000, HR = 3600000, DAY = 86400000;
+  var TOAST_MS = 2800;
+  var toastTimer = null;
+
+  var state = {
+    jobs: [],
+    loading: true,
+    loadError: null,
+    search: "",
+    filter: "all",
+    detailId: null,
+    openMenuId: null,
+    modal: null,          // "disable" | "delete" | null
+    modalJobId: null,
+    reasonDraft: "",
+    modalError: null,
+    modalBusy: false,
+    toast: null,
+    activity: { entries: [], loading: true, loadError: null, jobFilter: null, collapsed: false },
+    drawerHistory: { jobId: null, entries: [], loading: false, loadError: null },
+  };
+
+  // ---------- icons (inline Material Icons paths — no external asset/CDN dependency) ----------
+  var ICON_PATHS = {
+    search: "M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z",
+    refresh: "M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z",
+    pause: "M6 19h4V5H6v14zm8-14v14h4V5h-4z",
+    pauseCircle: "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 13H9V9h2v6zm4 0h-2V9h2v6z",
+    playArrow: "M8 5v14l11-7z",
+    bolt: "M11 21h-1l1-7H7.5c-.58 0-.57-.32-.38-.66L13 3h1l-1 7h3.5c.49 0 .56.33.47.51C12.96 17.55 11 21 11 21z",
+    moreVert: "M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z",
+    checkCircle: "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z",
+    error: "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z",
+    block: "M12 2C6.47 2 2 6.47 2 12s4.47 10 10 10 10-4.47 10-10S17.53 2 12 2zM4 12c0-4.42 3.58-8 8-8 1.85 0 3.55.63 4.9 1.69L5.69 16.9C4.63 15.55 4 13.85 4 12zm8 8c-1.85 0-3.55-.63-4.9-1.69L18.31 7.1C19.37 8.45 20 10.15 20 12c0 4.42-3.58 8-8 8z",
+    doNotDisturbOn: "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zM7 11h10v2H7z",
+    delete: "M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z",
+    close: "M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z",
+    history: "M13 3a9 9 0 0 0-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21a9 9 0 0 0 0-18zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z",
+    expandMore: "M16.59 8.59L12 13.17 7.41 8.59 6 10l6 6 6-6z",
+  };
+  function icon(name, size, extraStyle) {
+    var d = ICON_PATHS[name] || "";
+    var s = size || 16;
+    return '<svg viewBox="0 0 24 24" width="' + s + '" height="' + s + '" style="flex-shrink:0' + (extraStyle ? ";" + extraStyle : "") + '" fill="currentColor" aria-hidden="true"><path d="' + d + '"></path></svg>';
+  }
+
+  // ---------- helpers ----------
+  function escapeHtml(value) {
+    var div = document.createElement("div");
+    div.textContent = value == null ? "" : String(value);
+    return div.innerHTML;
+  }
+  function escapeAttr(value) { return escapeHtml(value).replace(/"/g, "&quot;"); }
+
+  function fmtRel(iso) {
+    if (!iso) return null;
+    var diff = new Date(iso).getTime() - Date.now();
+    var abs = Math.abs(diff);
+    var m = Math.round(abs / MIN), h = Math.round(abs / HR), d = Math.round(abs / DAY);
+    var s;
+    if (m < 1) s = "moments"; else if (m < 60) s = m + " min"; else if (h < 24) s = h + " hr"; else s = d + " day" + (d === 1 ? "" : "s");
+    return diff < 0 ? s + " ago" : "in " + s;
+  }
+  function fmtAbs(iso) {
+    if (!iso) return "";
+    var date = new Date(iso);
+    return isNaN(date.getTime()) ? "" : date.toLocaleString("en-AU", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+  }
+  function describeCron(expr) {
+    var p = String(expr || "").trim().split(/\s+/);
+    if (p.length < 5) return "Custom schedule";
+    var off = p.length === 6 ? 1 : 0;
+    var min = p[off], hr = p[off + 1], dom = p[off + 2], mon = p[off + 3], dow = p[off + 4];
+    function time(h, m) {
+      var hh = parseInt(h, 10), mm = parseInt(m, 10);
+      if (isNaN(hh) || isNaN(mm)) return null;
+      var ap = hh < 12 ? "AM" : "PM"; var h12 = hh % 12; if (h12 === 0) h12 = 12;
+      return h12 + ":" + String(mm).padStart(2, "0") + " " + ap;
+    }
+    var days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+    if (/^\*\/\d+$/.test(min) && hr === "*" && dom === "*" && mon === "*" && dow === "*") return "Every " + min.slice(2) + " minutes";
+    if (min !== "*" && /^\*\/\d+$/.test(hr) && dom === "*" && mon === "*" && dow === "*") return "Every " + hr.slice(2) + " hours";
+    if (min !== "*" && hr !== "*" && dom === "*" && mon === "*" && dow === "*") { var t1 = time(hr, min); return t1 ? "Every day at " + t1 : "Custom schedule"; }
+    if (min !== "*" && hr !== "*" && dom === "*" && mon === "*" && /^[0-6]$/.test(dow)) { var t2 = time(hr, min); return t2 ? "Every " + days[parseInt(dow, 10)] + " at " + t2 : "Custom schedule"; }
+    if (min !== "*" && hr !== "*" && /^\d+$/.test(dom) && mon === "*" && dow === "*") { var t3 = time(hr, min); return t3 ? "Monthly on day " + dom + " at " + t3 : "Custom schedule"; }
+    return "Custom schedule";
+  }
+  // The dashboard's own base path isn't known to this bundled page — this only needs to be right for
+  // the Last-Execution link to work, so a broken link (wrong host dashboard path) degrades gracefully.
+  function dashboardJobUrl(jobId) { return "/hangfire/jobs/details/" + encodeURIComponent(jobId); }
+
+  // Different hosts serialize JSON with different casing conventions. Normalizing here — rather than
+  // requiring every host to configure camelCase — is what keeps this one HTML file usable as-is.
+  function lowerFirst(key) { return key.charAt(0).toLowerCase() + key.slice(1); }
+  function normalizeKeys(value) {
+    if (Array.isArray(value)) return value.map(normalizeKeys);
+    if (value && typeof value === "object") {
+      var out = {};
+      Object.keys(value).forEach(function (key) { out[lowerFirst(key)] = normalizeKeys(value[key]); });
+      return out;
+    }
+    return value;
+  }
+
+  function getJob(id) {
+    for (var i = 0; i < state.jobs.length; i++) if (state.jobs[i].id === id) return state.jobs[i];
+    return null;
+  }
+  function isDisabled(job) { return !!(job.disableStatus && job.disableStatus.disabled); }
+
+  // ---------- render, with focus preserved across the full re-render ----------
+  function render() {
+    var active = document.activeElement;
+    var focusId = active && active.id;
+    var selStart = active && typeof active.selectionStart === "number" ? active.selectionStart : null;
+    var selEnd = active && typeof active.selectionEnd === "number" ? active.selectionEnd : null;
+
+    document.getElementById("app").innerHTML = renderApp();
+
+    if (focusId) {
+      var el = document.getElementById(focusId);
+      if (el) {
+        el.focus();
+        if (selStart != null && el.setSelectionRange) {
+          try { el.setSelectionRange(selStart, selEnd); } catch (e) { /* not a text-range input */ }
+        }
+      }
+    }
+  }
+
+  function renderApp() {
+    var html = renderPage();
+    if (state.openMenuId) html += '<div class="menu-overlay" data-action="close-menu"></div>';
+    if (state.detailId) html += renderDrawer();
+    if (state.modal) html += renderModal();
+    if (state.toast) html += renderToast();
+    return html;
+  }
+
+  function matchesSearch(job) {
+    var q = state.search.trim().toLowerCase();
+    if (!q) return true;
+    return job.id.toLowerCase().indexOf(q) !== -1 || (job.jobDisplayName || "").toLowerCase().indexOf(q) !== -1;
+  }
+
+  function renderPage() {
+    var searched = state.jobs.filter(matchesSearch);
+    var counts = {
+      all: searched.length,
+      enabled: searched.filter(function (j) { return !isDisabled(j); }).length,
+      disabled: searched.filter(isDisabled).length,
+      failing: searched.filter(function (j) { return j.lastJobState === "Failed"; }).length,
+    };
+    var visible = searched;
+    if (state.filter === "enabled") visible = searched.filter(function (j) { return !isDisabled(j); });
+    else if (state.filter === "disabled") visible = searched.filter(isDisabled);
+    else if (state.filter === "failing") visible = searched.filter(function (j) { return j.lastJobState === "Failed"; });
+
+    var disabledJobs = state.jobs.filter(isDisabled);
+
+    var html = '';
+    html += '<div class="page-head">';
+    html += '<div><h2>Recurring jobs</h2><p class="subtitle">' +
+      (state.loading ? "Loading…" : state.jobs.length + " recurring jobs · " + counts.enabled + " enabled · " + counts.disabled + " disabled") +
+      '</p></div>';
+    html += '<div class="head-actions">';
+    html += '<div class="search-box">' + icon("search", 18) +
+      '<input id="search-input" data-action="search" value="' + escapeAttr(state.search) + '" placeholder="Search jobs"></div>';
+    html += '<button class="btn-outline-navy" data-action="refresh">' + icon("refresh", 18) + 'Refresh</button>';
+    html += '</div></div>';
+
+    if (state.loadError) {
+      html += '<div id="load-error">' + escapeHtml(state.loadError) + '</div>';
+    } else if (!state.loading) {
+      if (disabledJobs.length > 0) {
+        html += '<div class="banner">' + icon("pauseCircle", 22) + '<div style="flex:1">';
+        html += '<div class="banner-title">' + disabledJobs.length + ' job' + (disabledJobs.length === 1 ? ' is' : 's are') + ' currently disabled</div>';
+        html += '<div class="banner-body">Disabled jobs still appear in the Daily All-Clear summary so a forgotten pause stays visible. Skipped occurrences are not backfilled on re-enable.</div>';
+        html += '<div class="banner-chips">';
+        disabledJobs.forEach(function (j) {
+          html += '<button class="banner-chip" data-action="open-detail" data-id="' + escapeAttr(j.id) + '">' + icon("doNotDisturbOn", 14) + escapeHtml(j.id) + '</button>';
+        });
+        html += '</div></div></div>';
+      }
+
+      html += '<div class="filters">';
+      [["all", "All", counts.all], ["enabled", "Enabled", counts.enabled], ["disabled", "Disabled", counts.disabled], ["failing", "Failing", counts.failing]].forEach(function (f) {
+        var active = state.filter === f[0];
+        html += '<button class="filter-chip' + (active ? ' active' : '') + '" data-action="filter" data-filter="' + f[0] + '">' + f[1] + '<span class="count">' + f[2] + '</span></button>';
+      });
+      html += '</div>';
+
+      html += '<div class="table-card"><table><thead><tr>' +
+        '<th>Job</th><th>Schedule</th><th>Next run</th><th>Last run</th><th>Status</th><th style="width:1px"></th>' +
+        '</tr></thead><tbody>';
+      visible.forEach(function (job) { html += renderRow(job); });
+      html += '</tbody></table>';
+      if (visible.length === 0) {
+        html += '<div class="empty-state">' + icon("search", 30) + '<div style="margin-top:10px;font-size:14px">No jobs match this view.</div></div>';
+      }
+      html += '</div>';
+
+      html += '<p class="footnote">Recurring jobs are code-declared and registered on startup. Disable writes a durable flag on the job that survives deploys; a disabled job still fires then skips (no backfill of missed runs). Rolling back to a build without the skip filter silently resumes every disabled job.</p>';
+
+      html += renderActivityPanel();
+    }
+    return html;
+  }
+
+  function renderActivityPanel() {
+    var a = state.activity;
+    var html = '<div class="table-card activity-card" id="activity-panel">';
+    html += '<div class="activity-head" data-action="toggle-activity">';
+    html += '<div class="activity-head-title">' + icon("history", 17) + 'Activity';
+    if (a.jobFilter) {
+      html += '<span class="activity-filter-note">— showing history for <code class="cron-chip">' + escapeHtml(a.jobFilter) + '</code></span>';
+    }
+    html += '</div>';
+    html += '<div style="display:flex;align-items:center;gap:8px">';
+    if (a.jobFilter) {
+      html += '<button class="btn-ghost-ring" style="height:28px;padding:0 12px" data-action="clear-activity-filter" data-stop-row-click="1">Clear filter</button>';
+    }
+    html += icon("expandMore", 20, a.collapsed ? "transform:rotate(-90deg)" : "");
+    html += '</div></div>';
+
+    if (!a.collapsed) {
+      if (a.loadError) {
+        html += '<div class="activity-load-error" style="padding:0 18px 16px;color:var(--danger-text);font-size:13px">' + escapeHtml(a.loadError) + '</div>';
+      } else if (a.loading) {
+        html += '<div style="padding:0 18px 16px;color:var(--text-tertiary);font-size:13px">Loading…</div>';
+      } else if (a.entries.length === 0) {
+        html += '<div class="empty-state">No activity recorded yet.</div>';
+      } else {
+        html += '<table class="activity-body"><thead><tr>' +
+          '<th>Time</th><th>Actor</th><th>Action</th><th>Job</th><th>Reason</th><th>Outcome</th>' +
+          '</tr></thead><tbody>';
+        a.entries.forEach(function (e) { html += renderActivityRow(e, { showJob: true }); });
+        html += '</tbody></table>';
+      }
+    }
+    html += '</div>';
+    return html;
+  }
+
+  function renderActivityRow(entry, opts) {
+    var showJob = !!(opts && opts.showJob);
+    var outcomeOk = entry.outcome === "ok";
+    var outcomePill = outcomeOk
+      ? '<span class="pill pill-positive">' + icon("checkCircle", 12) + 'OK</span>'
+      : '<span class="pill pill-neutral">' + icon("error", 12) + escapeHtml(entry.outcome || "unknown") + '</span>';
+    var jobCell = showJob
+      ? '<td><button class="filter-chip" style="height:26px;padding:0 10px" data-action="history" data-id="' + escapeAttr(entry.jobId) + '">' + escapeHtml(entry.jobId) + '</button></td>'
+      : '';
+    return '<tr>' +
+      '<td><div>' + escapeHtml(fmtRel(entry.at)) + '</div><div class="last-abs">' + escapeHtml(fmtAbs(entry.at)) + '</div></td>' +
+      '<td>' + escapeHtml(entry.actor) + '</td>' +
+      '<td>' + escapeHtml(entry.action) + '</td>' +
+      jobCell +
+      '<td class="activity-reason" title="' + escapeAttr(entry.reason || "") + '">' + escapeHtml(entry.reason || "—") + '</td>' +
+      '<td>' + outcomePill + '</td>' +
+      '</tr>';
+  }
+
+  function renderRow(job) {
+    var disabled = isDisabled(job);
+    var dotColor = disabled ? "var(--warning-border)" : (job.lastJobState === "Failed" ? "var(--danger-text)" : "#a1d26a");
+    var id = escapeAttr(job.id);
+
+    var scheduleCell = '<code class="cron-chip">' + escapeHtml(job.cron) + '</code>' +
+      '<div class="cron-human">' + escapeHtml(describeCron(job.cron)) + ' · ' + escapeHtml(job.timeZoneId || "UTC") + '</div>';
+
+    var nextCell;
+    if (disabled) {
+      nextCell = '<div class="next-run-main" style="color:var(--text-tertiary);text-decoration:line-through">' + escapeHtml(fmtRel(job.nextExecution) || "—") + '</div>' +
+        '<div class="will-skip">' + icon("block", 12) + 'will be skipped</div>';
+    } else {
+      nextCell = '<div class="next-run-main" style="font-weight:500">' + escapeHtml(fmtRel(job.nextExecution) || "—") + '</div>' +
+        '<div class="next-run-abs">' + escapeHtml(fmtAbs(job.nextExecution)) + '</div>';
+    }
+
+    var lastCell;
+    if (!job.lastExecution) {
+      lastCell = '<span class="last-none">Never run</span>';
+    } else {
+      var lastInner = escapeHtml(fmtRel(job.lastExecution));
+      var lastLink = job.lastJobId
+        ? '<a href="' + escapeAttr(dashboardJobUrl(job.lastJobId)) + '" style="color:inherit;text-decoration:none">' + lastInner + '</a>'
+        : lastInner;
+      if (job.lastJobState === "Failed") {
+        lastCell = '<div class="last-fail">' + icon("error", 15) + 'Failed · ' + lastLink + '</div><div class="last-abs">' + escapeHtml(fmtAbs(job.lastExecution)) + '</div>';
+      } else {
+        lastCell = '<div class="last-ok">' + icon("checkCircle", 15, "color:var(--positive-text)") + lastLink + '</div><div class="last-abs">' + escapeHtml(fmtAbs(job.lastExecution)) + '</div>';
+      }
+    }
+
+    var statusCell;
+    if (disabled) {
+      var by = escapeHtml(job.disableStatus.by || "unknown");
+      var ago = escapeHtml(fmtRel(job.disableStatus.at) || "");
+      statusCell = '<span class="pill pill-warning">' + icon("pause", 13) + 'Disabled</span><div class="pill-sub">by ' + by + ' · ' + ago + '</div>';
+    } else {
+      statusCell = '<span class="pill pill-positive">' + icon("playArrow", 13) + 'Enabled</span>';
+    }
+
+    var actionBtn = disabled
+      ? '<button class="btn-navy-fill" data-action="enable" data-id="' + id + '">Enable</button>'
+      : '<button class="btn-ghost-ring" data-action="disable" data-id="' + id + '">Disable</button>';
+
+    var menu = state.openMenuId === job.id
+      ? '<div class="kebab-menu">' +
+        '<button class="kebab-item" data-action="trigger" data-id="' + id + '">' + icon("bolt", 18) + 'Trigger now</button>' +
+        '<button class="kebab-item" data-action="open-detail" data-id="' + id + '">' + icon("history", 18) + 'History</button>' +
+        '<div class="kebab-divider"></div>' +
+        '<button class="kebab-item danger" data-action="ask-delete" data-id="' + id + '">' + icon("delete", 18) + 'Delete</button>' +
+        '</div>'
+      : '';
+
+    return '<tr data-action="open-detail" data-id="' + id + '">' +
+      '<td><div class="job-cell"><span class="job-dot" style="background:' + dotColor + '"></span><div style="min-width:0"><div class="job-id">' + escapeHtml(job.id) + '</div><div class="job-method">' + escapeHtml(job.jobDisplayName || "not available") + '</div></div></div></td>' +
+      '<td>' + scheduleCell + '</td>' +
+      '<td>' + nextCell + '</td>' +
+      '<td>' + lastCell + '</td>' +
+      '<td>' + statusCell + '</td>' +
+      '<td class="actions-cell"><div class="actions-inline" data-stop-row-click="1">' + actionBtn +
+        '<button class="kebab-btn" title="More actions" data-action="toggle-menu" data-id="' + id + '">' + icon("moreVert", 20) + '</button></div>' + menu + '</td>' +
+      '</tr>';
+  }
+
+  function renderDrawer() {
+    var job = getJob(state.detailId);
+    if (!job) return "";
+    var disabled = isDisabled(job);
+    var id = escapeAttr(job.id);
+    var statusPill = disabled
+      ? '<span class="pill pill-warning" style="font-size:11.5px">' + icon("pause", 12) + 'Disabled</span>'
+      : '<span class="pill pill-positive" style="font-size:11.5px">' + icon("playArrow", 12) + 'Enabled</span>';
+
+    var html = '<div class="scrim" data-action="close-detail"></div><aside class="drawer">';
+    html += '<div class="drawer-head"><div class="drawer-title-row"><div style="min-width:0">' +
+      '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><h3 class="drawer-title">' + escapeHtml(job.id) + '</h3>' + statusPill + '</div>' +
+      '<div class="drawer-method">' + escapeHtml(job.jobDisplayName || "not available") + '</div></div>' +
+      '<button class="drawer-close" data-action="close-detail">' + icon("close", 20) + '</button></div>';
+
+    html += '<div class="tabs">' +
+      '<button class="tab-btn active">Overview</button>' +
+      '<button class="tab-btn disabled" disabled>Schedule <span class="tab-soon">Soon</span></button>' +
+      '<button class="tab-btn disabled" disabled>Invoke <span class="tab-soon">Soon</span></button>' +
+      '</div></div>';
+
+    html += '<div class="drawer-body">';
+    if (disabled) {
+      html += '<div class="callout-warning">' + icon("pauseCircle", 20) + '<div>' +
+        '<div class="title">Disabled by ' + escapeHtml(job.disableStatus.by || "unknown") + ' · ' + escapeHtml(fmtRel(job.disableStatus.at) || "") + '</div>' +
+        '<div class="body">' + escapeHtml(job.disableStatus.reason || "") + '</div></div></div>';
+    }
+    html += '<dl class="def-list">';
+    html += '<div><dt>Method</dt><dd style="font-family:var(--mono);font-size:12.5px">' + escapeHtml(job.jobDisplayName || "not available") + '</dd></div>';
+    html += '<div><dt>Schedule</dt><dd><code class="cron-chip">' + escapeHtml(job.cron) + '</code> <span style="color:var(--text-tertiary)">' + escapeHtml(describeCron(job.cron)) + '</span></dd></div>';
+    html += '<div><dt>Time zone</dt><dd>' + escapeHtml(job.timeZoneId || "UTC") + '</dd></div>';
+    var nextLine = (fmtRel(job.nextExecution) || "—") + (disabled ? "  ·  will be skipped" : (job.nextExecution ? "  ·  " + fmtAbs(job.nextExecution) : ""));
+    html += '<div><dt>Next run</dt><dd>' + escapeHtml(nextLine) + '</dd></div>';
+    var lastLine = job.lastExecution ? (job.lastJobState + "  ·  " + fmtRel(job.lastExecution) + "  ·  " + fmtAbs(job.lastExecution)) : "Never run";
+    html += '<div><dt>Last run</dt><dd>' + escapeHtml(lastLine) + '</dd></div>';
+    html += '<div><dt>Created</dt><dd>' + escapeHtml(fmtAbs(job.createdAt)) + '</dd></div>';
+    html += '</dl>';
+
+    html += '<div class="drawer-action-row">';
+    html += disabled
+      ? '<button class="btn-navy-fill" style="height:40px;padding:0 20px" data-action="enable" data-id="' + id + '">' + icon("playArrow", 17) + ' Enable</button>'
+      : '<button class="btn-ghost-ring" style="height:40px" data-action="disable" data-id="' + id + '">' + icon("pause", 17) + ' Disable</button>';
+    html += '<button class="btn-outline-navy" data-action="trigger" data-id="' + id + '">' + icon("bolt", 17) + 'Trigger now</button>';
+    html += '</div>';
+    html += renderJobHistorySection();
+    html += '</div></aside>';
+    return html;
+  }
+
+  function renderJobHistorySection() {
+    var h = state.drawerHistory;
+    var html = '<div class="drawer-section-title">' + icon("history", 15) + 'History</div>';
+    if (h.loadError) {
+      html += '<div style="padding:4px 0;color:var(--danger-text);font-size:13px">' + escapeHtml(h.loadError) + '</div>';
+    } else if (h.loading) {
+      html += '<div style="padding:4px 0;color:var(--text-tertiary);font-size:13px">Loading…</div>';
+    } else if (h.entries.length === 0) {
+      html += '<div style="padding:4px 0;color:var(--text-tertiary);font-size:13px">No activity recorded yet.</div>';
+    } else {
+      html += '<div class="drawer-history-table"><table class="activity-body"><thead><tr>' +
+        '<th>Time</th><th>Actor</th><th>Action</th><th>Reason</th><th>Outcome</th>' +
+        '</tr></thead><tbody>';
+      h.entries.forEach(function (e) { html += renderActivityRow(e); });
+      html += '</tbody></table></div>';
+    }
+    return html;
+  }
+
+  function renderModal() {
+    var job = getJob(state.modalJobId);
+    var id = escapeHtml(state.modalJobId || "");
+    var html = '<div class="modal-scrim"><div class="modal-box">';
+    if (state.modal === "disable") {
+      var reasonValid = state.reasonDraft.trim().length > 0;
+      html += '<div class="modal-head"><div class="modal-icon" style="background:var(--warning-bg)">' + icon("pause", 22) + '</div>' +
+        '<div><h3 class="modal-title">Disable ' + id + '</h3>' +
+        '<p class="modal-body-text">The job stays scheduled but every fire is skipped until re-enabled. <b>Skipped runs are not backfilled.</b></p></div></div>';
+      html += '<div style="margin-top:18px"><div class="reason-label">Reason <span style="color:var(--danger-text)">*</span></div>' +
+        '<textarea id="disable-reason-input" class="reason-input" data-action="reason-input" rows="3" placeholder="e.g. Paused during payment-provider incident INC-1042">' + escapeHtml(state.reasonDraft) + '</textarea></div>';
+      if (state.modalError) html += '<div class="modal-error">' + escapeHtml(state.modalError) + '</div>';
+      html += '<div class="modal-footer"><button class="btn-text" data-action="close-modal">Cancel</button>' +
+        '<button class="btn-warning-fill" data-action="confirm-disable"' + (!reasonValid || state.modalBusy ? " disabled" : "") + '>Disable job</button></div>';
+    } else if (state.modal === "delete") {
+      html += '<div class="modal-head"><div class="modal-icon" style="background:var(--danger-bg)">' + icon("delete", 22) + '</div>' +
+        '<div><h3 class="modal-title">Delete ' + id + '</h3>' +
+        '<p class="modal-body-text">Removes the recurring job from storage. This <b>does not stop it firing again</b> — code re-registers it on the next deploy. To keep it off durably, disable it instead.</p></div></div>';
+      if (state.modalError) html += '<div class="modal-error">' + escapeHtml(state.modalError) + '</div>';
+      html += '<div class="modal-footer"><button class="btn-text" data-action="close-modal">Cancel</button>' +
+        '<button class="btn-danger-fill" data-action="confirm-delete"' + (state.modalBusy ? " disabled" : "") + '>Delete anyway</button></div>';
+    }
+    html += '</div></div>';
+    return html;
+  }
+
+  function renderToast() {
+    return '<div class="toast">' + icon(state.toast.icon, 18) + escapeHtml(state.toast.message) + '</div>';
+  }
+
+  // ---------- data loading ----------
+  function loadJobs() {
+    state.loading = state.jobs.length === 0;
+    state.loadError = null;
+    render();
+    fetch(API_BASE, { credentials: "same-origin" })
+      .then(function (res) {
+        if (!res.ok) throw new Error("Failed to load jobs (HTTP " + res.status + ")");
+        return res.json();
+      })
+      .then(normalizeKeys)
+      .then(function (jobs) {
+        state.jobs = jobs;
+        state.loading = false;
+        render();
+      })
+      .catch(function (err) {
+        state.loading = false;
+        state.loadError = err.message;
+        render();
+      });
+  }
+
+  function loadActivity() {
+    var a = state.activity;
+    a.loading = a.entries.length === 0;
+    a.loadError = null;
+    render();
+    var url = API_BASE + "/audit?limit=100" + (a.jobFilter ? "&jobId=" + encodeURIComponent(a.jobFilter) : "");
+    fetch(url, { credentials: "same-origin" })
+      .then(function (res) {
+        if (!res.ok) throw new Error("Failed to load activity (HTTP " + res.status + ")");
+        return res.json();
+      })
+      .then(normalizeKeys)
+      .then(function (entries) {
+        a.entries = entries;
+        a.loading = false;
+        render();
+      })
+      .catch(function (err) {
+        a.loading = false;
+        a.loadError = err.message;
+        render();
+      });
+  }
+
+  function loadJobHistory(jobId) {
+    var h = state.drawerHistory;
+    h.jobId = jobId;
+    h.loading = true;
+    h.loadError = null;
+    render();
+    fetch(API_BASE + "/audit?limit=50&jobId=" + encodeURIComponent(jobId), { credentials: "same-origin" })
+      .then(function (res) {
+        if (!res.ok) throw new Error("Failed to load history (HTTP " + res.status + ")");
+        return res.json();
+      })
+      .then(normalizeKeys)
+      .then(function (entries) {
+        if (state.drawerHistory.jobId !== jobId) return; // drawer moved to a different job (or closed) meanwhile
+        h.entries = entries;
+        h.loading = false;
+        render();
+      })
+      .catch(function (err) {
+        if (state.drawerHistory.jobId !== jobId) return;
+        h.loading = false;
+        h.loadError = err.message;
+        render();
+      });
+  }
+
+  function apiPost(jobId, action, body) {
+    return fetch(API_BASE + "/" + encodeURIComponent(jobId) + "/" + action, {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body || {}),
+    }).then(function (res) {
+      if (!res.ok) return res.text().then(function (t) { throw new Error(t || ("Request failed with HTTP " + res.status)); });
+    });
+  }
+
+  function showToast(message, iconName) {
+    state.toast = { message: message, icon: iconName || "checkCircle" };
+    render();
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { state.toast = null; render(); }, TOAST_MS);
+  }
+
+  // ---------- actions ----------
+  function doEnable(jobId) {
+    apiPost(jobId, "enable", {})
+      .then(function () { loadJobs(); loadActivity(); showToast("Enabled '" + jobId + "'", "playArrow"); })
+      .catch(function (err) { showToast("Failed to enable '" + jobId + "': " + err.message, "error"); });
+  }
+  function doTrigger(jobId) {
+    var job = getJob(jobId);
+    var wasDisabled = job && isDisabled(job);
+    apiPost(jobId, "trigger", {})
+      .then(function () { loadActivity(); showToast(wasDisabled ? "'" + jobId + "' is disabled — trigger was skipped" : "Enqueued '" + jobId + "'", wasDisabled ? "block" : "bolt"); })
+      .catch(function (err) { showToast("Failed to trigger '" + jobId + "': " + err.message, "error"); });
+  }
+  function confirmDisable() {
+    var jobId = state.modalJobId, reason = state.reasonDraft.trim();
+    if (!reason) return;
+    state.modalBusy = true; state.modalError = null; render();
+    apiPost(jobId, "disable", { reason: reason })
+      .then(function () {
+        state.modal = null; state.modalJobId = null; state.modalBusy = false;
+        loadJobs();
+        loadActivity();
+        showToast("Disabled '" + jobId + "'", "pauseCircle");
+      })
+      .catch(function (err) { state.modalBusy = false; state.modalError = err.message; render(); });
+  }
+  function confirmDelete() {
+    var jobId = state.modalJobId;
+    state.modalBusy = true; state.modalError = null; render();
+    apiPost(jobId, "delete", {})
+      .then(function () {
+        state.modal = null; state.modalJobId = null; state.modalBusy = false;
+        if (state.detailId === jobId) state.detailId = null;
+        loadJobs();
+        loadActivity();
+        showToast("Deleted '" + jobId + "' (will return on next deploy)", "delete");
+      })
+      .catch(function (err) { state.modalBusy = false; state.modalError = err.message; render(); });
+  }
+
+  // ---------- event delegation ----------
+  document.addEventListener("click", function (event) {
+    // Background dismiss: only when the click lands directly on the scrim itself, not a bubbled
+    // click from inside .modal-box (which is nested inside .modal-scrim for centering).
+    if (event.target.classList && event.target.classList.contains("modal-scrim")) {
+      state.modal = null; state.modalJobId = null; state.modalError = null; render(); return;
+    }
+
+    var target = event.target.closest("[data-action]");
+    if (!target) return;
+    var action = target.getAttribute("data-action");
+    var id = target.getAttribute("data-id");
+
+    // Row action buttons/kebab live inside a clickable <tr> — don't also open the drawer.
+    if (target.closest("[data-stop-row-click]") && action !== "open-detail") event.stopPropagation();
+
+    switch (action) {
+    case "refresh": loadJobs(); loadActivity(); showToast("Reloaded from storage", "refresh"); break;
+    case "filter": state.filter = target.getAttribute("data-filter"); render(); break;
+    case "open-detail": state.detailId = id; state.openMenuId = null; loadJobHistory(id); break;
+    case "close-detail": state.detailId = null; render(); break;
+    case "toggle-menu": event.stopPropagation(); state.openMenuId = state.openMenuId === id ? null : id; render(); break;
+    case "close-menu": state.openMenuId = null; render(); break;
+    case "disable": state.modal = "disable"; state.modalJobId = id; state.reasonDraft = ""; state.modalError = null; state.openMenuId = null; render(); break;
+    case "ask-delete": state.modal = "delete"; state.modalJobId = id; state.modalError = null; state.openMenuId = null; render(); break;
+    case "enable": doEnable(id); break;
+    case "trigger": doTrigger(id); state.openMenuId = null; render(); break;
+    case "close-modal": state.modal = null; state.modalJobId = null; state.modalError = null; render(); break;
+    case "confirm-disable": confirmDisable(); break;
+    case "confirm-delete": confirmDelete(); break;
+    case "toggle-activity": state.activity.collapsed = !state.activity.collapsed; render(); break;
+    case "clear-activity-filter": state.activity.jobFilter = null; loadActivity(); break;
+    case "history":
+      state.openMenuId = null;
+      state.activity.jobFilter = id;
+      state.activity.collapsed = false;
+      loadActivity();
+      setTimeout(function () {
+        var panel = document.getElementById("activity-panel");
+        if (panel) panel.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 30);
+      break;
+    }
+  });
+
+  document.addEventListener("input", function (event) {
+    if (event.target.getAttribute("data-action") === "search") { state.search = event.target.value; render(); }
+    else if (event.target.getAttribute("data-action") === "reason-input") {
+      // A full render() here would tear down and recreate .modal-scrim/.modal-box, replaying their
+      // CSS entrance animations (fade/pop) on every keystroke — the visible flicker. The only thing
+      // that actually needs to change per keystroke is the confirm button's disabled state.
+      state.reasonDraft = event.target.value;
+      var confirmBtn = document.querySelector('[data-action="confirm-disable"]');
+      if (confirmBtn) confirmBtn.disabled = state.reasonDraft.trim().length === 0 || state.modalBusy;
+    }
+  });
+
+  document.addEventListener("keydown", function (event) {
+    if (event.key !== "Escape") return;
+    if (state.modal) { state.modal = null; state.modalJobId = null; render(); }
+    else if (state.openMenuId) { state.openMenuId = null; render(); }
+    else if (state.detailId) { state.detailId = null; render(); }
+  });
+
+  loadJobs();
+  loadActivity();
+})();
+</script>
+</body>
+</html>

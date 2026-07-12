@@ -1,0 +1,71 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Test, pack, and publish
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: hangfire_opstoolkit
+        ports:
+          - 5434:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Derive package version from tag
+        id: version
+        shell: bash
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Restore
+        run: dotnet restore Hangfire.OpsToolkit.sln
+
+      - name: Build
+        run: dotnet build Hangfire.OpsToolkit.sln --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test Hangfire.OpsToolkit.sln --configuration Release --no-build
+
+      - name: Pack
+        run: >-
+          dotnet pack src/Hangfire.OpsToolkit.JobControl/Hangfire.OpsToolkit.JobControl.csproj
+          --configuration Release
+          --output nupkg
+          -p:Version=${{ steps.version.outputs.version }}
+
+      - name: Publish package
+        run: >-
+          dotnet nuget push "nupkg/*.nupkg"
+          --source https://api.nuget.org/v3/index.json
+          --api-key ${{ secrets.NUGET_API_KEY }}
+          --skip-duplicate
+
+      - name: Publish symbols
+        run: >-
+          dotnet nuget push "nupkg/*.snupkg"
+          --source https://api.nuget.org/v3/index.json
+          --api-key ${{ secrets.NUGET_API_KEY }}
+          --skip-duplicate

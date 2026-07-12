@@ -1,0 +1,73 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>12.0</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <!--
+    Publishing model (two repos): THIS repo is for development, including internal preview releases 鈥?
+    a vX.Y.Z tag here publishes to this repo's own GitHub Packages feed. The PUBLIC repo at
+    PublicRepositoryUrl is where canonical release builds are produced and pushed to nuget.org, and it
+    is the only thing the package metadata may link back to 鈥?a consumer following ProjectUrl or
+    RepositoryUrl must land somewhere public. If the public repo's address ever changes, change
+    PublicRepositoryUrl and nothing else.
+  -->
+  <PropertyGroup>
+    <PublicRepositoryUrl>https://github.com/GeXiaoguo/Hangfire.OpsToolkit.Public</PublicRepositoryUrl>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <PackageId>Hangfire.OpsToolkit.JobControl</PackageId>
+    <!-- Fallback for local `dotnet pack` only 鈥?release builds derive the version from the git tag. -->
+    <Version>0.1.0</Version>
+    <Authors>Xiaoguo Ge</Authors>
+    <Description>Durable disable/enable/trigger/delete for Hangfire recurring jobs, with a bundled zero-build operator UI. No schema, no migration 鈥?state lives in Hangfire's own storage.</Description>
+    <PackageTags>hangfire;background-jobs;recurring-jobs;operations</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>$(PublicRepositoryUrl)</PackageProjectUrl>
+    <RepositoryUrl>$(PublicRepositoryUrl)</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <!-- Source Link ships in the .NET 8 SDK. The PDB's source links point at the repo that produced
+         the build (dev repo for previews, public repo for releases); the explicit RepositoryUrl above
+         is not overridden 鈥?package metadata always points at the public home. -->
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
+    <!-- Ship the XML docs with the package; CS1591 (undocumented public member) stays a non-error
+         under TreatWarningsAsErrors 鈥?comments are written where they say something, not everywhere. -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <!--
+    JobControl module of Hangfire.OpsToolkit: durable operator control of recurring jobs. Zero schema 鈥?
+    no table, no migration; state lives in Hangfire's own storage. Dependencies are limited to
+    Hangfire.Core, the ASP.NET Core shared framework (for the endpoints 鈥?not a NuGet package, just the
+    framework any ASP.NET Core host already has), and BCL. No host-specific project reference, no
+    host-specific domain types 鈥?this is what lets it ship as a standalone package that any Hangfire
+    host can add with no rework on its side. Audit (state-transition capture) and other OpsToolkit
+    modules are deliberately separate packages.
+  -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Hangfire.Core" Version="1.8.14" />
+  </ItemGroup>
+
+  <!-- The operator UI: one embedded HTML file, no wwwroot static-file hosting required of the host. -->
+  <ItemGroup>
+    <EmbeddedResource Include="wwwroot\job-control.html" />
+  </ItemGroup>
+
+</Project>
+

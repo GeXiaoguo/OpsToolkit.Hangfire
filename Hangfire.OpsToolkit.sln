@@ -1,0 +1,50 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{59B82CA2-FF27-493B-BDBB-ACC85244E8E3}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Hangfire.OpsToolkit.JobControl", "src\Hangfire.OpsToolkit.JobControl\Hangfire.OpsToolkit.JobControl.csproj", "{3842EA83-8ABF-47E0-8DB8-58E26C3CCB19}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{5435B1C6-9C70-4E32-94DC-36E1C61DC6E5}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Hangfire.OpsToolkit.JobControl.Tests", "tests\Hangfire.OpsToolkit.JobControl.Tests\Hangfire.OpsToolkit.JobControl.Tests.csproj", "{36B64245-950D-4C32-8AC2-B8DCB5D9971B}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Hangfire.OpsToolkit.Host.IntegrationTests", "tests\Hangfire.OpsToolkit.Host.IntegrationTests\Hangfire.OpsToolkit.Host.IntegrationTests.csproj", "{FFD3F52F-EEDE-4359-B61D-F2FC38D35C93}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Hangfire.OpsToolkit.Host", "tests\Hangfire.OpsToolkit.Host\Hangfire.OpsToolkit.Host.csproj", "{23EA13F7-7E33-4C9B-8C96-DB8D3656F56C}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{3842EA83-8ABF-47E0-8DB8-58E26C3CCB19}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3842EA83-8ABF-47E0-8DB8-58E26C3CCB19}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3842EA83-8ABF-47E0-8DB8-58E26C3CCB19}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3842EA83-8ABF-47E0-8DB8-58E26C3CCB19}.Release|Any CPU.Build.0 = Release|Any CPU
+		{36B64245-950D-4C32-8AC2-B8DCB5D9971B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{36B64245-950D-4C32-8AC2-B8DCB5D9971B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{36B64245-950D-4C32-8AC2-B8DCB5D9971B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{36B64245-950D-4C32-8AC2-B8DCB5D9971B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{FFD3F52F-EEDE-4359-B61D-F2FC38D35C93}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FFD3F52F-EEDE-4359-B61D-F2FC38D35C93}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FFD3F52F-EEDE-4359-B61D-F2FC38D35C93}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FFD3F52F-EEDE-4359-B61D-F2FC38D35C93}.Release|Any CPU.Build.0 = Release|Any CPU
+		{23EA13F7-7E33-4C9B-8C96-DB8D3656F56C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{23EA13F7-7E33-4C9B-8C96-DB8D3656F56C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{23EA13F7-7E33-4C9B-8C96-DB8D3656F56C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{23EA13F7-7E33-4C9B-8C96-DB8D3656F56C}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{3842EA83-8ABF-47E0-8DB8-58E26C3CCB19} = {59B82CA2-FF27-493B-BDBB-ACC85244E8E3}
+		{36B64245-950D-4C32-8AC2-B8DCB5D9971B} = {5435B1C6-9C70-4E32-94DC-36E1C61DC6E5}
+		{FFD3F52F-EEDE-4359-B61D-F2FC38D35C93} = {5435B1C6-9C70-4E32-94DC-36E1C61DC6E5}
+		{23EA13F7-7E33-4C9B-8C96-DB8D3656F56C} = {5435B1C6-9C70-4E32-94DC-36E1C61DC6E5}
+	EndGlobalSection
+EndGlobal
