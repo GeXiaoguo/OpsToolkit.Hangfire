@@ -18,8 +18,15 @@
     <PackageReference Include="Hangfire.PostgreSql" Version="1.20.13" />
   </ItemGroup>
 
-  <ItemGroup>
+  <ItemGroup Condition="'$(UsePackedJobControl)' != 'true'">
     <ProjectReference Include="..\..\src\Hangfire.OpsToolkit.JobControl\Hangfire.OpsToolkit.JobControl.csproj" />
+  </ItemGroup>
+
+  <!-- Release CI switches to this reference after packing, then reruns the existing HTTP integration
+       suite against the exact artifact that will be published. JobControlPackageVersion is supplied
+       by the release tag. Normal development continues to use the project reference above. -->
+  <ItemGroup Condition="'$(UsePackedJobControl)' == 'true'">
+    <PackageReference Include="OpsToolkit.Hangfire.JobControl" Version="$(JobControlPackageVersion)" />
   </ItemGroup>
 
 </Project>
