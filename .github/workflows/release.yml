@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   publish:
@@ -56,16 +57,24 @@ jobs:
           --output nupkg
           -p:Version=${{ steps.version.outputs.version }}
 
+      # Exchange GitHub's OIDC identity for a short-lived nuget.org API key. The trusted-publishing
+      # policy is restricted to this repository and this release.yml workflow.
+      - name: Authenticate to NuGet
+        id: nuget-login
+        uses: NuGet/login@v1
+        with:
+          user: xiaoguo.ge
+
       - name: Publish package
         run: >-
           dotnet nuget push "nupkg/*.nupkg"
           --source https://api.nuget.org/v3/index.json
-          --api-key ${{ secrets.NUGET_API_KEY }}
+          --api-key ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
           --skip-duplicate
 
       - name: Publish symbols
         run: >-
           dotnet nuget push "nupkg/*.snupkg"
           --source https://api.nuget.org/v3/index.json
-          --api-key ${{ secrets.NUGET_API_KEY }}
+          --api-key ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
           --skip-duplicate
