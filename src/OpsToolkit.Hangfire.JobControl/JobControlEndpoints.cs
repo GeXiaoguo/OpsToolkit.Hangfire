@@ -51,7 +51,8 @@ public static class JobControlEndpoints
     // Authorization header only for paths under their dashboard's own mount point. A sibling path like
     // /api/hangfire/recurring looks equally sensible but can silently 401 from the browser despite a
     // valid session, if that conversion is scoped to /hangfire only.
-    public const string DefaultApiBase = "/hangfire/api/recurring";
+    public const string DefaultApiBase = "/hangfire/api";
+    public const string DefaultRecurringApiBase = DefaultApiBase + "/recurring";
 
     // Renamed from bare "/hangfire/job-control" now that a second page (RunEndpoints, "/runs") exists
     // alongside it. LegacyUiPath keeps old bookmarks working
@@ -76,9 +77,11 @@ public static class JobControlEndpoints
     /// <paramref name="viewPolicy"/> gates reads (job lists + audit history + both UI pages);
     /// <paramref name="managePolicy"/> gates mutations (disable/enable/trigger/delete — each of which is
     /// audited, see <see cref="AuditStore"/>).
+    /// <paramref name="apiBase"/> is the shared API root; recurring-job routes are mapped beneath
+    /// <c>/recurring</c> and run routes beneath <c>/runs</c>.
     /// </summary>
     /// <remarks>
-    /// Behavior changes, both pre-1.0 (no tag cut yet) so not versioned as breaking, but worth flagging
+    /// Behavior changes, both pre-1.0, so they are versioned as minor releases but worth flagging
     /// to any caller that already depended on the old shape:
     /// <list type="bullet">
     /// <item><c>/{jobId}/delete</c> now returns 404 for an unknown id (previously 200 unconditionally) —
@@ -95,12 +98,13 @@ public static class JobControlEndpoints
         string uiPath = DefaultUiPath,
         string apiBase = DefaultApiBase,
         string runsUiPath = RunEndpoints.DefaultUiPath,
-        string runsApiBase = RunEndpoints.DefaultApiBase,
         JobControlOptions? options = null)
     {
         var jobControlOptions = options ?? new JobControlOptions();
-        endpoints.MapJobControlApi(viewPolicy, managePolicy, apiBase, options);
-        endpoints.MapJobControlUi(uiPath, apiBase, runsUiPath, jobControlOptions.DashboardPath).RequireAuthorization(viewPolicy);
+        var recurringApiBase = childApiBase(apiBase, "recurring");
+        var runsApiBase = childApiBase(apiBase, "runs");
+        endpoints.MapJobControlApi(viewPolicy, managePolicy, recurringApiBase, options);
+        endpoints.MapJobControlUi(uiPath, recurringApiBase, runsUiPath, jobControlOptions.DashboardPath).RequireAuthorization(viewPolicy);
         endpoints.MapJobRunsApi(viewPolicy, managePolicy, runsApiBase, options);
         endpoints.MapJobRunsUi(runsUiPath, runsApiBase, uiPath).RequireAuthorization(viewPolicy);
         endpoints.MapGet(LegacyUiPath, () => Results.Redirect(uiPath)).RequireAuthorization(viewPolicy);
@@ -262,7 +266,7 @@ public static class JobControlEndpoints
     public static RouteHandlerBuilder MapJobControlUi(
         this IEndpointRouteBuilder endpoints,
         string uiPath = DefaultUiPath,
-        string apiBase = DefaultApiBase,
+        string apiBase = DefaultRecurringApiBase,
         string runsUiPath = RunEndpoints.DefaultUiPath,
         string dashboardPath = "/hangfire")
     {
@@ -302,5 +306,11 @@ public static class JobControlEndpoints
                 $"Embedded resource '{UiResourceName}' not found — check the EmbeddedResource item in the csproj.");
         using var reader = new StreamReader(stream);
         return reader.ReadToEnd();
+    }
+
+    private static string childApiBase(string apiBase, string child)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(apiBase);
+        return $"{apiBase.TrimEnd('/')}/{child}";
     }
 }

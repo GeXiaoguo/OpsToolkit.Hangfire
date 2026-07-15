@@ -23,7 +23,7 @@
   <PropertyGroup>
     <PackageId>OpsToolkit.Hangfire.JobControl</PackageId>
     <!-- Fallback for local `dotnet pack` only — release builds derive the version from the git tag. -->
-    <Version>0.2.0</Version>
+    <Version>0.3.0</Version>
     <Authors>Xiaoguo Ge</Authors>
     <Description>Durable disable/enable/trigger/delete for Hangfire recurring jobs, with a bundled zero-build operator UI. No schema, no migration — state lives in Hangfire's own storage.</Description>
     <PackageTags>hangfire;background-jobs;recurring-jobs;operations</PackageTags>

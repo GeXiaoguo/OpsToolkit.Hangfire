@@ -7,6 +7,8 @@ The Job Runs feature provides an authorized JSON facade over Hangfire's monitori
 The dashboard covers statistics, queues, servers, and paged Enqueued, Processing, Scheduled, Succeeded, Failed, and Deleted lists. Job details include invocation data, parameters, and full state history. Page size defaults to `RunsDefaultPageSize` and is capped at 500.
 
 Default paths are under `/hangfire/api/runs`; the embedded UI is `/hangfire/job-control/runs`.
+`MapJobControl(apiBase: "/hangfire/api")` derives the `/runs` branch from that shared root. The
+lower-level `MapJobRunsApi()` method continues to accept a complete, independent runs API path.
 
 ## Actions and race protection
 

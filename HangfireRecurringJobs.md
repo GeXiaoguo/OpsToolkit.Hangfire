@@ -24,6 +24,10 @@ A deployment that removes `UseJobControl()` stops enforcement even though the st
 
 With the default paths, `MapJobControl()` exposes:
 
+`MapJobControl(apiBase: "/hangfire/api")` treats `apiBase` as a shared root and derives this
+feature's `/recurring` branch. The lower-level `MapJobControlApi()` method still accepts the full
+recurring API path for hosts that compose endpoints manually.
+
 | Method | Path | Purpose |
 |---|---|---|
 | GET | `/hangfire/api/recurring` | List recurring jobs |

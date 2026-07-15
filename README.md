@@ -55,11 +55,21 @@ builder.Services.AddHangfire(configuration => configuration
 app.MapJobControl(
     viewPolicy: "CanViewJobs",
     managePolicy: "CanManageJobs",
+    apiBase: "/hangfire/api",
     options: jobControl);
 ```
 
 `UseJobControl()` installs the server-side filters that enforce recurring-job disable and
 acknowledge processing-job cancellation. `MapJobControl()` maps both APIs and both UIs.
+
+`apiBase` is one shared root. JobControl maps recurring-job endpoints beneath
+`{apiBase}/recurring` and run endpoints beneath `{apiBase}/runs`. Consumers that require unrelated
+paths can map the lower-level `MapJobControlApi()` and `MapJobRunsApi()` methods directly.
+
+> **0.3.0 routing change:** in 0.2.x, `apiBase` represented the complete recurring API path and
+> `runsApiBase` configured runs separately. In 0.3.0, `apiBase` is their shared root and
+> `runsApiBase` is removed from `MapJobControl()`. `DefaultApiBase` now names the shared root; use
+> `DefaultRecurringApiBase` when calling a lower-level recurring mapper.
 
 The default pages are:
 
