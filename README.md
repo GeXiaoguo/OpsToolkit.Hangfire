@@ -1,33 +1,21 @@
 # OpsToolkit.Hangfire
 
-Production controls for Hangfire installations that need durable operator state, explicit
-authorization, and an audit trail—without adding a database schema, frontend build, or
-storage-provider dependency.
+Operational controls for Hangfire installations that need durable operator state, explicit authorization, and an audit trail.
 
-`OpsToolkit.Hangfire.JobControl` provides:
+The first module, `OpsToolkit.Hangfire.JobControl`, provides:
 
 - durable disable and enable for recurring jobs;
+- operator schedule and parameter-value overrides that survive deploys (`effective = override ?? code default`), with reset and on-demand reconcile;
+- schema-driven manual invoke with edited parameter values — the force-run that executes even while a job is disabled;
 - governed trigger and delete actions;
 - a Job Runs dashboard for queued, processing, scheduled, succeeded, failed, and deleted jobs;
 - reasoned, race-protected cancel, requeue, and delete actions;
-- cancellation acknowledgement for processing jobs;
+- cancellation acknowledgment for processing jobs;
+- an opt-in `[Heartbeat]` liveness contract for long-running jobs, with `context.Beat()` progress reporting surfaced on the Runs dashboard;
+- stall detection for contracted jobs — a scanning background process, a stalled view with detector health, operator acknowledgment, and a dashboard count tile (flag-only by default);
+- opt-in, governed retry-on-stall — the confirmed-hung body is cancelled through the shared, audited cancellation protocol and re-run only on its own acknowledgment, within a per-job budget; an unacknowledged cancel blocks requeue behind an audited break-glass;
 - a count-retained operator audit trail; and
 - two embedded, zero-build operator UIs.
-
-## Why use it?
-
-Hangfire's dashboard is excellent for observing background work, but production teams often need a
-stronger operational boundary. JobControl adds that boundary while staying close to Hangfire's own
-storage model:
-
-- **Operator accountability:** audit entries capture actor, action, job, reason, timestamp, and
-  outcome.
-- **Authorization by construction:** separate ASP.NET Core policies protect viewing and management.
-- **Zero-schema adoption:** toolkit state uses Hangfire's existing storage primitives—no migrations
-  or additional tables.
-- **Bundled UI:** two embedded HTML resources, with no npm toolchain or static-file setup.
-- **Storage-provider friendly:** the package depends on `Hangfire.Core`, not a particular SQL or
-  storage provider.
 
 ## Install
 
@@ -39,8 +27,6 @@ dotnet add package OpsToolkit.Hangfire.JobControl
 
 ## Quick start
 
-Use one options instance for both the server and HTTP planes so their audit retention agrees:
-
 ```csharp
 var jobControl = new JobControlOptions
 {
@@ -49,8 +35,10 @@ var jobControl = new JobControlOptions
 };
 
 builder.Services.AddHangfire(configuration => configuration
-    .UsePostgreSqlStorage(/* your existing storage configuration */)
+    .UsePostgreSqlStorage(/* ... */)
     .UseJobControl(jobControl));
+
+builder.Services.AddJobControlStallDetector(jobControl); // optional: stall detection for [Heartbeat] jobs
 
 app.MapJobControl(
     viewPolicy: "CanViewJobs",
@@ -59,8 +47,20 @@ app.MapJobControl(
     options: jobControl);
 ```
 
-`UseJobControl()` installs the server-side filters that enforce recurring-job disable and
-acknowledge processing-job cancellation. `MapJobControl()` maps both APIs and both UIs.
+`UseJobControl()` installs the server-side filters that enforce recurring-job disable and acknowledge processing-job cancellation. `MapJobControl()` maps the recurring and run APIs plus both UIs. `AddJobControlStallDetector()` registers the background process that flags contracted long-running jobs whose heartbeats stop. Pass the same options everywhere so server- and HTTP-plane behavior agrees.
+
+To let operators override job schedules and parameter values durably, declare recurring jobs through a `RecurringJobRegistrar` instead of `RecurringJob.AddOrUpdate` and share it via the options:
+
+```csharp
+var registrar = new RecurringJobRegistrar();
+var jobControl = new JobControlOptions { Registrar = registrar };
+// ... UseJobControl(jobControl) + MapJobControl(..., options: jobControl) as above ...
+
+registrar.Register<ReportingJobs>("nightly-report", x => x.Run(), Cron.Daily());
+registrar.Apply(JobStorage.Current, jobControl);   // projects effective = override ?? code default
+```
+
+Without a registrar every other capability still works; the override and invoke endpoints respond 501 and the UI hides those controls. See [Recurring Jobs control](HangfireRecurringJobs.md) for reconciliation, rollback behavior, and rollout caveats.
 
 `apiBase` is one shared root. JobControl maps recurring-job endpoints beneath
 `{apiBase}/recurring` and run endpoints beneath `{apiBase}/runs`. Consumers that require unrelated
@@ -73,12 +73,11 @@ paths can map the lower-level `MapJobControlApi()` and `MapJobRunsApi()` methods
 
 The default pages are:
 
-- `/hangfire/job-control/recurring` — recurring-job controls and history
-- `/hangfire/job-control/runs` — run monitoring, details, and actions
-- `/hangfire/job-control` — redirects to the recurring-jobs page
+- `/hangfire/job-control/recurring` - recurring-job controls and history
+- `/hangfire/job-control/runs` - run monitoring, details, and actions
+- `/hangfire/job-control` - redirect to the recurring-jobs page
 
-The view and manage policies are required arguments. Reads and UIs use the view policy; all
-mutations use the manage policy.
+The view and manage policies are required arguments. Reads and UIs use the view policy; all mutations use the manage policy.
 
 ## Configuration
 
@@ -92,22 +91,53 @@ var options = new JobControlOptions
 };
 ```
 
-All toolkit state is kept in Hangfire storage: custom recurring-job hash fields, a capped audit
-list, and per-job cancellation markers. Hosts need no toolkit schema or migration.
+All toolkit state is kept in Hangfire storage: custom recurring-job hash fields, a capped audit list, and a per-job cancellation marker. Hosts need no toolkit schema or migration.
 
-Cancellation of a processing job is cooperative. Job bodies must flow a `CancellationToken` into
-awaited work or check `IJobCancellationToken`; otherwise they may complete after the job moves to
-Deleted. The audit trail records that case as `completed-anyway`.
+Cancellation of a Processing job is cooperative. Job bodies must flow a `CancellationToken` into awaited work or check `IJobCancellationToken`; otherwise they may complete even after the job has moved to Deleted. The audit trail records that case as `completed-anyway`.
+
+### Built-in Dashboard hosting requirement
+
+OpsToolkit's mutation guarantees — expected-state checks, cancellation acknowledgments, per-job
+locking, required reasons, and audit records — apply only to mutations that go through OpsToolkit.
+Hangfire's built-in Dashboard understands the persisted state name (`Deleted`) but none of those
+records, so its native requeue/delete buttons can, for example, requeue a job whose cancelled body
+has not yet acknowledged that it stopped (OPS-003). Governed mode therefore requires mapping the
+built-in Dashboard read-only; it remains the read plane for queues, servers, states, and history:
+
+```csharp
+app.MapHangfireDashboard("/hangfire", new DashboardOptions
+{
+    Authorization = new[] { new HostDashboardAuthorizationFilter() },
+    IsReadOnlyFunc = _ => true,
+});
+```
+
+| Mode | Native Dashboard | Guarantee |
+|---|---|---|
+| Governed mode (recommended) | `IsReadOnlyFunc = _ => true` | OpsToolkit is the only operator mutation surface; acknowledgment-gated requeue and audit guarantees apply |
+| Compatibility mode | Writable | Native delete/requeue/recurring-job actions bypass OpsToolkit policy: they can requeue an unacknowledged cancellation, skip intervention audits and required reasons, skip the expected-state and per-job locking rules, and leave OpsToolkit workflow projections disagreeing with Hangfire's state |
+
+Read-only Dashboard mode closes the operator-UI bypass; it is not a security boundary. Application
+code, another service, or a storage administrator calling Hangfire's state APIs directly can still
+mutate governed jobs — every writer sharing the Hangfire storage must follow the same
+cancellation/requeue protocol if the governed guarantee is required.
+
+## Hosting limitation
+
+The current package can only be referenced and configured by an ASP.NET Core web host that also
+runs the Hangfire server. A split deployment with the dashboard/API web host and Hangfire server
+worker in separate processes is not supported by this release. That topology requires the HTTP and
+server components to be separated in a future package release.
 
 ## Feature documentation
 
 - [Recurring Jobs control](HangfireRecurringJobs.md)
 - [Job Runs dashboard and cancellation](HangfireJobRuns.md)
+- [Long-running job liveness: heartbeat, progress, stall detection, and governed retry](HangfireLiveness.md)
+- [Liveness design: the two-layer model, the retry state machine, and rejected alternatives](HangfireLivenessDesign.md)
 - [Operator audit trail](HangfireAuditTrail.md)
 
-## Try the demo
-
-The included host uses PostgreSQL for realistic storage and HTTP integration testing:
+## Run the demo
 
 ```bash
 cd tests/OpsToolkit.Hangfire.Host
@@ -115,28 +145,8 @@ docker compose -f docker-compose.postgres.yaml up -d
 dotnet run
 ```
 
-Open `/hangfire` for the standard dashboard or either toolkit page listed above.
-
-## Build and test
-
-With the demo PostgreSQL container running:
-
-```bash
-dotnet restore OpsToolkit.Hangfire.sln
-dotnet build OpsToolkit.Hangfire.sln --configuration Release --no-restore
-dotnet test OpsToolkit.Hangfire.sln --configuration Release --no-build
-```
-
-## Community
-
-Bug reports, compatibility findings, documentation improvements, and focused feature proposals are
-welcome through GitHub Issues. If you run Hangfire in a production or regulated environment,
-sharing the operational problem you are solving is especially valuable—it helps keep the toolkit
-practical and provider-neutral.
-
-OpsToolkit.Hangfire is an independent community project and is not affiliated with or endorsed by
-Hangfire OÜ.
+Open the built-in Hangfire dashboard or either toolkit page at the address printed by the host.
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+MIT - see [LICENSE](LICENSE).

@@ -1,5 +1,6 @@
 using Hangfire;
 using Hangfire.Common;
+using Hangfire.Dashboard;
 
 namespace OpsToolkit.Hangfire.JobControl;
 
@@ -13,9 +14,10 @@ public static class GlobalConfigurationExtensions
     /// <summary>
     /// Registers <see cref="DisabledRecurringJobFilter"/> globally at order -1 — before a method-level
     /// <c>[DisableConcurrentExecution]</c> (default order -1; Global scope sorts ahead of Method scope
-    /// at equal order) takes its distributed lock — and <see cref="CancellationOutcomeFilter"/> (default
-    /// order; only <c>OnPerformed</c> is used, so ordering relative to other filters doesn't matter).
-    /// Idempotent: <c>GlobalJobFilters</c> is process-global, so any prior instance of either filter is
+    /// at equal order) takes its distributed lock — plus <see cref="CancellationOutcomeFilter"/> and
+    /// <see cref="LivenessFilter"/> at default order (after the disable filter, so a disable-skip never
+    /// starts a liveness contract; relative order between the two doesn't matter).
+    /// Idempotent: <c>GlobalJobFilters</c> is process-global, so any prior instance of each filter is
     /// replaced rather than stacked — safe when the host is built more than once in a process (e.g.
     /// integration tests).
     /// </summary>
@@ -25,6 +27,16 @@ public static class GlobalConfigurationExtensions
 
         replace(new DisabledRecurringJobFilter(), order: -1);
         replace(new CancellationOutcomeFilter(jobControlOptions.AuditMaxEntries), order: null);
+        replace(new LivenessFilter(jobControlOptions.AuditMaxEntries, jobControlOptions.Liveness), order: null);
+
+        // The built-in dashboard's one liveness integration: a stalled-count tile on its home page —
+        // one set-count read per render through the stable UseDashboardMetric seam. Anything richer
+        // natively would mean replacing dashboard pages wholesale (version-fragile); the Runs UI stays
+        // the rich surface. Guarded like the filters: the home page's metric list is process-global and
+        // append-only (and internal, so not inspectable), so a second UseJobControl (integration tests
+        // build the host repeatedly in one process) must not stack tiles.
+        if (Interlocked.CompareExchange(ref _stalledMetricRegistered, 1, 0) == 0)
+            configuration.UseDashboardMetric(StalledJobsMetric);
 
         return configuration;
 
@@ -41,4 +53,29 @@ public static class GlobalConfigurationExtensions
             else GlobalJobFilters.Filters.Add(filter);
         }
     }
+
+    private static int _stalledMetricRegistered;
+
+    private static readonly DashboardMetric StalledJobsMetric = new(
+        "jobcontrol:liveness:stalled-count",
+        "Stalled jobs",
+        static page =>
+        {
+            try
+            {
+                using var connection = page.Storage.GetConnection();
+                var stalled = LivenessStore.CountStalled(connection);
+                return new Metric(stalled)
+                {
+                    Style = stalled > 0 ? MetricStyle.Warning : MetricStyle.Default,
+                    Highlighted = stalled > 0,
+                    Title = stalled > 0 ? "Executions flagged stalled — review them on the Job Runs page." : null,
+                };
+            }
+            catch
+            {
+                // The tile must never take down the dashboard home page over a storage hiccup.
+                return new Metric("—");
+            }
+        });
 }

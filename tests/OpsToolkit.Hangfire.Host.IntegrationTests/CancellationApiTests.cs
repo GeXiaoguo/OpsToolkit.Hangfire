@@ -46,8 +46,12 @@ public class CancellationApiTests : IClassFixture<WebApplicationFactory<Program>
         ack!.Detail!["Result"].ShouldBe("aborted");
         long.Parse(ack.Detail["ElapsedMs"]).ShouldBeGreaterThanOrEqualTo(0);
 
-        var cancelEntry = (await getRunsAudit(jobId)).First(e => e.Action == "cancel");
-        cancelEntry.Outcome.ShouldBe("ok");
+        // Polled like the ack above rather than fetched once: the entry is committed before the cancel
+        // endpoint even responds, yet a single unpolled read here has been observed (rarely, on a CI VM)
+        // to come back without it while a poll moments later sees it — flake-hardening, not semantics.
+        var cancelEntry = await waitForAuditAction(jobId, "cancel");
+        cancelEntry.ShouldNotBeNull();
+        cancelEntry!.Outcome.ShouldBe("ok");
         cancelEntry.Reason.ShouldBe("integration test");
     }
 

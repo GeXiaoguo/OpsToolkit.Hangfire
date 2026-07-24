@@ -105,6 +105,7 @@
   .btn-ghost-ring:hover { box-shadow: inset 0 0 0 1.5px var(--warning-border); color: var(--warning-text); }
   .btn-navy-fill { height: 32px; padding: 0 16px; border: none; background: var(--navy); color: #fff; border-radius: 999px; font-weight: 600; font-size: 13px; }
   .btn-navy-fill:hover { background: var(--navy-hover); }
+  .btn-navy-fill:disabled { background: var(--hairline); color: var(--disabled-fg); cursor: not-allowed; }
   .kebab-btn { width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; border: none; background: transparent; border-radius: 8px; color: var(--text-secondary); }
   .kebab-btn:hover { background: rgba(12,13,14,0.06); }
   .kebab-menu { position: absolute; top: 48px; right: 14px; z-index: 40; min-width: 190px; background: #fff; border: 1px solid var(--hairline); border-radius: 10px; box-shadow: var(--shadow-dropdown); padding: 6px; animation: pop 0.12s ease-out; }
@@ -125,6 +126,9 @@
   .activity-body td { font-size: 13px; }
   .activity-reason { color: var(--text-tertiary); max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .pill-neutral { background: var(--surface); color: var(--text-secondary); }
+  .pill-info { background: var(--info-bg); color: var(--info-text); }
+  input.cron-input { width: 100%; height: 42px; padding: 0 13px; border: 1px solid var(--hairline); border-radius: 8px; font-family: var(--mono); font-size: 14px; color: var(--text-primary); outline: none; }
+  input.cron-input:focus { border-color: var(--navy); box-shadow: 0 0 0 3px rgba(0,42,97,0.12); }
   #status { color: var(--text-tertiary); font-size: 13px; margin-bottom: 12px; }
   #load-error { color: var(--danger-text); font-size: 13px; margin-bottom: 12px; }
 
@@ -224,13 +228,30 @@
   if (API_BASE.charAt(0) === "{") (function () {
     function iso(ms) { return new Date(Date.now() + ms).toISOString(); }
     var jobs = [
-      { id: "daily-all-clear", jobDisplayName: "ReportingJobs.SendDailyAllClear", cron: "0 7 * * *", timeZoneId: "Australia/Sydney", nextExecution: iso(5 * HR), lastExecution: iso(-19 * HR), lastJobState: "Succeeded", lastJobId: "882401", createdAt: iso(-90 * DAY), disableStatus: null },
-      { id: "payment-retry-sweep", jobDisplayName: "PaymentJobs.RetryFailedPayments", cron: "*/15 * * * *", timeZoneId: "UTC", nextExecution: iso(9 * MIN), lastExecution: iso(-6 * MIN), lastJobState: "Succeeded", lastJobId: "882537", createdAt: iso(-200 * DAY), disableStatus: null },
-      { id: "loan-book-reconciliation", jobDisplayName: "LedgerJobs.ReconcileLoanBook", cron: "0 2 * * *", timeZoneId: "Australia/Sydney", nextExecution: iso(11 * HR), lastExecution: iso(-37 * HR), lastJobState: "Failed", lastJobId: "881904", createdAt: iso(-150 * DAY), disableStatus: { disabled: true, by: "m.chen", at: iso(-2 * DAY), reason: "Paused during payment-provider incident INC-1042 — reconciliation double-counts while the provider replays webhooks." } },
-      { id: "statement-generation", jobDisplayName: "ReportingJobs.GenerateMonthlyStatements", cron: "0 6 1 * *", timeZoneId: "Australia/Sydney", nextExecution: iso(12 * DAY), lastExecution: iso(-19 * DAY), lastJobState: "Succeeded", lastJobId: "861210", createdAt: iso(-300 * DAY), disableStatus: null },
-      { id: "stale-quote-cleanup", jobDisplayName: "QuoteJobs.ExpireStaleQuotes", cron: "0 */4 * * *", timeZoneId: "UTC", nextExecution: iso(3 * HR), lastExecution: null, lastJobState: null, lastJobId: null, createdAt: iso(-1 * DAY), disableStatus: null },
-      { id: "credit-file-refresh", jobDisplayName: "CreditJobs.RefreshBureauFiles", cron: "30 3 * * 1", timeZoneId: "Australia/Sydney", nextExecution: iso(2 * DAY), lastExecution: iso(-3 * HR), lastJobState: "Failed", lastJobId: "882130", createdAt: iso(-60 * DAY), disableStatus: null },
+      { id: "daily-all-clear", jobDisplayName: "ReportingJobs.SendDailyAllClear", cron: "0 7 * * *", timeZoneId: "Australia/Sydney", nextExecution: iso(5 * HR), lastExecution: iso(-19 * HR), lastJobState: "Succeeded", lastJobId: "882401", createdAt: iso(-90 * DAY), disableStatus: null, cronDefault: "0 7 * * *", declared: true, override: null },
+      { id: "payment-retry-sweep", jobDisplayName: "PaymentJobs.RetryFailedPayments", cron: "*/15 * * * *", timeZoneId: "UTC", nextExecution: iso(9 * MIN), lastExecution: iso(-6 * MIN), lastJobState: "Succeeded", lastJobId: "882537", createdAt: iso(-200 * DAY), disableStatus: null, cronDefault: "*/30 * * * *", declared: true, override: { cron: "*/15 * * * *", argsJson: '{"batchSize":500,"dryRun":false}', updatedBy: "s.patel", updatedAt: iso(-4 * DAY), reason: "Sweep twice as often while the payment-provider backlog drains (INC-1042 follow-up).", invalidatedAt: "", invalidatedReason: "" } },
+      { id: "loan-book-reconciliation", jobDisplayName: "LedgerJobs.ReconcileLoanBook", cron: "0 2 * * *", timeZoneId: "Australia/Sydney", nextExecution: iso(11 * HR), lastExecution: iso(-37 * HR), lastJobState: "Failed", lastJobId: "881904", createdAt: iso(-150 * DAY), disableStatus: { disabled: true, by: "m.chen", at: iso(-2 * DAY), reason: "Paused during payment-provider incident INC-1042 — reconciliation double-counts while the provider replays webhooks." }, cronDefault: "0 2 * * *", declared: true, override: null },
+      { id: "statement-generation", jobDisplayName: "ReportingJobs.GenerateMonthlyStatements", cron: "0 6 1 * *", timeZoneId: "Australia/Sydney", nextExecution: iso(12 * DAY), lastExecution: iso(-19 * DAY), lastJobState: "Succeeded", lastJobId: "861210", createdAt: iso(-300 * DAY), disableStatus: null, cronDefault: "0 6 1 * *", declared: true, override: null },
+      { id: "stale-quote-cleanup", jobDisplayName: "QuoteJobs.ExpireStaleQuotes", cron: "0 */4 * * *", timeZoneId: "UTC", nextExecution: iso(3 * HR), lastExecution: null, lastJobState: null, lastJobId: null, createdAt: iso(-1 * DAY), disableStatus: null, cronDefault: null, declared: false, override: null },
+      { id: "credit-file-refresh", jobDisplayName: "CreditJobs.RefreshBureauFiles", cron: "30 3 * * 1", timeZoneId: "Australia/Sydney", nextExecution: iso(2 * DAY), lastExecution: iso(-3 * HR), lastJobState: "Failed", lastJobId: "882130", createdAt: iso(-60 * DAY), disableStatus: null, cronDefault: "30 3 * * 1", declared: true, override: { cron: "95 3 * * 1", argsJson: null, updatedBy: "j.walsh", updatedAt: iso(-9 * DAY), reason: "Shift refresh later for bureau maintenance window.", invalidatedAt: iso(-1 * DAY), invalidatedReason: "bad-cron" } },
     ];
+    // Per-job parameter schemas backing GET /{id}/parameters — shapes chosen to exercise every input
+    // kind the form renders (number, bool, enum select, text, injected/read-only).
+    var paramSchemas = {
+      "payment-retry-sweep": [
+        { name: "batchSize", type: "int", editable: true, enumValues: null, codeDefault: 200 },
+        { name: "dryRun", type: "bool", editable: true, enumValues: null, codeDefault: false },
+        { name: "provider", type: "PaymentProvider", editable: true, enumValues: ["All", "Stripe", "DirectDebit"], codeDefault: "All" },
+        { name: "cancellationToken", type: "CancellationToken", editable: false, enumValues: null, codeDefault: null },
+      ],
+      "loan-book-reconciliation": [
+        { name: "asOf", type: "DateTime?", editable: true, enumValues: null, codeDefault: null },
+        { name: "tolerance", type: "decimal", editable: true, enumValues: null, codeDefault: 0.01 },
+      ],
+      "daily-all-clear": [],
+      "statement-generation": [],
+      "credit-file-refresh": [],
+    };
     var audit = [
       { at: iso(-2 * DAY), actor: "m.chen", action: "disable", jobId: "loan-book-reconciliation", reason: "Paused during payment-provider incident INC-1042", outcome: "ok" },
       { at: iso(-3 * DAY), actor: "s.patel", action: "trigger", jobId: "daily-all-clear", reason: "Re-send after mail outage", outcome: "ok" },
@@ -239,25 +260,92 @@
     function ok(data) {
       return Promise.resolve({ ok: true, status: 200, json: function () { return Promise.resolve(data); }, text: function () { return Promise.resolve(""); } });
     }
+    function err400(message) {
+      return Promise.resolve({ ok: false, status: 400, json: function () { return Promise.resolve(null); }, text: function () { return Promise.resolve(message); } });
+    }
+    function parametersView(job) {
+      var schema = paramSchemas[job.id] || [];
+      var overrideValues = {};
+      try { overrideValues = JSON.parse((job.override && job.override.argsJson) || "{}"); } catch (e) { }
+      var live = job.override && !job.override.invalidatedAt;
+      return {
+        jobId: job.id,
+        parameters: schema.map(function (p) {
+          var hasOverride = Object.prototype.hasOwnProperty.call(overrideValues, p.name);
+          return {
+            name: p.name, type: p.type, editable: p.editable, enumValues: p.enumValues,
+            codeDefault: p.codeDefault,
+            overrideValue: hasOverride ? overrideValues[p.name] : null,
+            effective: live && hasOverride ? overrideValues[p.name] : p.codeDefault,
+          };
+        }),
+        override: job.override,
+      };
+    }
+    function setPreviewOverride(job, patch, reason) {
+      var existing = job.override || { cron: null, argsJson: null };
+      job.override = {
+        cron: patch.hasOwnProperty("cron") ? patch.cron : existing.cron,
+        argsJson: patch.hasOwnProperty("argsJson") ? patch.argsJson : existing.argsJson,
+        updatedBy: "preview-user", updatedAt: iso(0), reason: reason, invalidatedAt: "", invalidatedReason: "",
+      };
+      if (!job.override.cron && !job.override.argsJson) job.override = null;
+    }
     window.fetch = function (url, opts) {
       var rest = String(url).slice(API_BASE.length);
+      var parts = rest.replace(/^\//, "").split("?")[0].split("/");
       if (!opts || !opts.method || opts.method === "GET") {
         if (rest.indexOf("/audit") === 0) {
           var m = /jobId=([^&]+)/.exec(rest);
           return ok(m ? audit.filter(function (e) { return e.jobId === decodeURIComponent(m[1]); }) : audit);
         }
+        if (parts[1] === "parameters") {
+          for (var g = 0; g < jobs.length; g++) if (jobs[g].id === decodeURIComponent(parts[0])) return ok(parametersView(jobs[g]));
+          return err400("unknown job");
+        }
         return ok(jobs);
       }
-      var parts = rest.replace(/^\//, "").split("/");
-      var jobId = decodeURIComponent(parts[0]), action = parts[1];
+      if (parts[0] === "reconcile") {
+        audit.unshift({ at: iso(0), actor: "preview-user", action: "reconcile", jobId: "*", reason: null, outcome: "ok" });
+        return ok({ projected: jobs.length, overriddenJobIds: ["payment-retry-sweep"], invalidatedJobIds: [], revalidatedJobIds: [], removedUndeclaredJobIds: [], undeclaredJobIds: ["stale-quote-cleanup"], errors: [] });
+      }
+      var jobId = decodeURIComponent(parts[0]), action = parts[1], subAction = parts[2];
       var body = {}; try { body = JSON.parse(opts.body || "{}"); } catch (e) { }
       var job = null;
       for (var i = 0; i < jobs.length; i++) if (jobs[i].id === jobId) job = jobs[i];
       if (action === "disable" && job) job.disableStatus = { disabled: true, by: "preview-user", at: iso(0), reason: body.reason };
       if (action === "enable" && job) job.disableStatus = null;
       if (action === "delete") for (var k = jobs.length - 1; k >= 0; k--) if (jobs[k].id === jobId) jobs.splice(k, 1);
-      audit.unshift({ at: iso(0), actor: "preview-user", action: action, jobId: jobId, reason: body.reason || null, outcome: "ok" });
-      return ok(null);
+      if (action === "cron" && !subAction && job) {
+        if (String(body.cron || "").split(/\s+/).some(function (p) { return /^\d+$/.test(p) && parseInt(p, 10) > 59; })) {
+          return err400("CRON expression is invalid (preview validation).");
+        }
+        job.cron = body.cron;
+        setPreviewOverride(job, { cron: body.cron }, body.reason);
+      }
+      if (action === "cron" && subAction === "reset" && job) {
+        job.cron = job.cronDefault;
+        setPreviewOverride(job, { cron: null }, body.reason);
+      }
+      if (action === "args" && !subAction && job) {
+        var schema = paramSchemas[job.id] || [];
+        for (var key in body.args) {
+          var known = schema.some(function (p) { return p.editable && p.name.toLowerCase() === key.toLowerCase(); });
+          if (!known) return err400("unknown parameter '" + key + "' — the method has no parameter by that name (preview validation)");
+        }
+        setPreviewOverride(job, { argsJson: JSON.stringify(body.args) }, body.reason);
+      }
+      if (action === "args" && subAction === "reset" && job) setPreviewOverride(job, { argsJson: null }, body.reason);
+      var invokeDetail = null;
+      if (action === "invoke" && job) {
+        invokeDetail = { backgroundJobId: String(880000 + Math.floor(Math.random() * 9999)) };
+        if (body.persist && body.args) setPreviewOverride(job, { argsJson: JSON.stringify(body.args) }, body.reason);
+      }
+      var auditAction = action;
+      if (action === "cron") auditAction = subAction === "reset" ? "cron-reset" : "cron-override";
+      if (action === "args") auditAction = subAction === "reset" ? "args-reset" : "args-override";
+      audit.unshift({ at: iso(0), actor: "preview-user", action: auditAction, jobId: jobId, reason: body.reason || null, outcome: "ok" });
+      return ok(invokeDetail);
     };
     var nav = document.querySelectorAll(".dash-nav a");
     if (nav[0]) nav[0].setAttribute("href", "recurring.html");
@@ -279,6 +367,23 @@
     drawerSettled: false,
     modalSettled: false,
     detailId: null,
+    drawerTab: "overview", // "overview" | "schedule" | "parameters" | "invoke"
+    cronDraft: "",
+    cronReasonDraft: "",
+    scheduleBusy: false,
+    scheduleError: null,
+    // GET /{id}/parameters result, shared by the Parameters and Invoke tabs; each tab keeps its own
+    // drafts so half-typed override edits don't leak into a one-off invoke (or vice versa).
+    params: { jobId: null, view: null, loading: false, loadError: null },
+    paramDrafts: {},        // parameter name -> input string (Parameters tab)
+    paramReasonDraft: "",
+    paramsBusy: false,
+    paramsError: null,
+    invokeDrafts: {},       // parameter name -> input string (Invoke tab)
+    invokePersist: false,
+    invokeReasonDraft: "",
+    invokeBusy: false,
+    invokeError: null,
     openMenuId: null,
     modal: null,          // "disable" | "delete" | null
     modalJobId: null,
@@ -374,11 +479,35 @@
     return value;
   }
 
+  // ---------- URL state ----------
+  // The active filter chip is mirrored into the location hash so a refresh or shared link reopens
+  // the same view instead of falling back to "All" — same pattern as runs.html's tab/queue sync.
+  var URL_FILTERS = ["all", "enabled", "disabled", "failing"];
+  function readUrlState() {
+    var params = new URLSearchParams(location.hash.slice(1));
+    var filter = params.get("filter");
+    if (filter && URL_FILTERS.indexOf(filter) !== -1) state.filter = filter;
+  }
+  function syncUrl() {
+    var hash = state.filter === "all" ? "" : "#filter=" + state.filter;
+    if ((location.hash || "") !== hash) history.replaceState(null, "", hash || location.pathname + location.search);
+  }
+
   function getJob(id) {
     for (var i = 0; i < state.jobs.length; i++) if (state.jobs[i].id === id) return state.jobs[i];
     return null;
   }
   function isDisabled(job) { return !!(job.disableStatus && job.disableStatus.disabled); }
+  // Override helpers. `declared` is null when the host has no registrar (overrides unavailable
+  // everywhere), false when this job isn't code-declared through it. An override row with a
+  // non-empty invalidatedAt is dormant — the row projects as a unit, so dormancy means the code
+  // defaults (schedule AND parameter values) are what actually runs.
+  function overridesAvailable() {
+    return state.jobs.some(function (j) { return j.declared !== null && j.declared !== undefined; });
+  }
+  function overrideInvalidated(job) { return !!(job.override && job.override.invalidatedAt); }
+  function hasActiveCronOverride(job) { return !!(job.override && job.override.cron && !overrideInvalidated(job)); }
+  function hasActiveArgsOverride(job) { return !!(job.override && job.override.argsJson && !overrideInvalidated(job)); }
 
   // ---------- render, with focus preserved across the full re-render ----------
   function render() {
@@ -445,6 +574,9 @@
         ? '<button class="search-clear" data-action="clear-search" title="Clear search">' + icon("close", 14) + '</button>'
         : '<span class="kbd-hint">/</span>') +
       '</div>';
+    if (!state.loading && overridesAvailable()) {
+      html += '<button class="btn-outline-navy" data-action="reconcile" title="Re-assert effective schedules (override ?? code default) from stored state — drift repair after a mixed-version rollout">' + icon("history", 18) + 'Reconcile</button>';
+    }
     html += '<button class="btn-outline-navy" data-action="refresh">' + icon("refresh", 18) + 'Refresh</button>';
     html += '</div></div>';
 
@@ -592,8 +724,19 @@
     var dotColor = disabled ? "var(--warning-border)" : (job.lastJobState === "Failed" ? "var(--danger-text)" : "#a1d26a");
     var id = escapeAttr(job.id);
 
-    var scheduleCell = '<code class="cron-chip">' + escapeHtml(job.cron) + '</code>' +
-      '<div class="cron-human">' + escapeHtml(describeCron(job.cron)) + ' · ' + escapeHtml(job.timeZoneId || "UTC") + '</div>';
+    var scheduleCell = '<code class="cron-chip">' + escapeHtml(job.cron) + '</code>';
+    if (hasActiveArgsOverride(job)) {
+      scheduleCell += ' <span class="pill pill-info" style="font-size:10.5px;padding:2px 8px;vertical-align:1px">params</span>';
+    }
+    if (hasActiveCronOverride(job)) {
+      scheduleCell += ' <span class="pill pill-info" style="font-size:10.5px;padding:2px 8px;vertical-align:1px">override</span>' +
+        '<div class="cron-human">' + escapeHtml(describeCron(job.cron)) + ' · code default <code class="cron-chip" style="font-size:11px;padding:1px 5px">' + escapeHtml(job.cronDefault || "") + '</code></div>';
+    } else {
+      scheduleCell += '<div class="cron-human">' + escapeHtml(describeCron(job.cron)) + ' · ' + escapeHtml(job.timeZoneId || "UTC") + '</div>';
+      if (overrideInvalidated(job)) {
+        scheduleCell += '<div class="will-skip" title="' + escapeAttr(job.override.cron || job.override.argsJson || "") + '">' + icon("error", 12) + 'override dormant (' + escapeHtml(job.override.invalidatedReason || "invalidated") + ')</div>';
+      }
+    }
 
     var nextCell;
     if (disabled) {
@@ -669,13 +812,38 @@
       '<div class="drawer-method">' + escapeHtml(job.jobDisplayName || "not available") + '</div></div>' +
       '<button class="drawer-close" data-action="close-detail">' + icon("close", 20) + '</button></div>';
 
+    // Every override tab is real only for jobs declared through the host's registrar — overrides
+    // and invoke need the code definition to rebuild the Job. declared === null means the host has
+    // no registrar at all; false means this particular job isn't code-declared through it.
+    var overrideTabsAvailable = job.declared === true;
+    var activeTab = overrideTabsAvailable && state.drawerTab !== "overview" ? state.drawerTab : "overview";
+    var notDeclaredTitle = job.declared === false
+      ? 'Not declared through the registrar — not operator-editable'
+      : 'The host has not adopted operator overrides (no registrar configured)';
+    function tabButton(key, label, pill) {
+      if (!overrideTabsAvailable)
+        return '<button class="tab-btn disabled" disabled title="' + notDeclaredTitle + '">' + label + ' <span class="tab-soon">N/A</span></button>';
+      return '<button class="tab-btn' + (activeTab === key ? ' active' : '') + '" data-action="drawer-tab" data-tab="' + key + '">' + label + (pill || '') + '</button>';
+    }
+    var overridePill = ' <span class="tab-soon" style="background:var(--info-bg);color:var(--info-text)">override</span>';
     html += '<div class="tabs">' +
-      '<button class="tab-btn active">Overview</button>' +
-      '<button class="tab-btn disabled" disabled>Schedule <span class="tab-soon">Soon</span></button>' +
-      '<button class="tab-btn disabled" disabled>Invoke <span class="tab-soon">Soon</span></button>' +
+      '<button class="tab-btn' + (activeTab === "overview" ? ' active' : '') + '" data-action="drawer-tab" data-tab="overview">Overview</button>' +
+      tabButton("schedule", "Schedule", hasActiveCronOverride(job) ? overridePill : '') +
+      tabButton("parameters", "Parameters", hasActiveArgsOverride(job) ? overridePill : '') +
+      tabButton("invoke", "Invoke", '') +
       '</div></div>';
 
     html += '<div class="drawer-body">';
+    if (activeTab === "schedule") {
+      html += renderScheduleTab(job);
+      html += '</div></aside>';
+      return html;
+    }
+    if (activeTab === "parameters" || activeTab === "invoke") {
+      html += activeTab === "parameters" ? renderParametersTab(job) : renderInvokeTab(job);
+      html += '</div></aside>';
+      return html;
+    }
     if (disabled) {
       html += '<div class="callout-warning">' + icon("pauseCircle", 20) + '<div>' +
         '<div class="title">Disabled by ' + escapeHtml(job.disableStatus.by || "unknown") + ' · ' + escapeHtml(fmtRel(job.disableStatus.at) || "") + '</div>' +
@@ -719,6 +887,226 @@
       h.entries.forEach(function (e) { html += renderActivityRow(e); });
       html += '</tbody></table></div>';
     }
+    return html;
+  }
+
+  function renderScheduleTab(job) {
+    var id = escapeAttr(job.id);
+    var activeOverride = hasActiveCronOverride(job);
+    var html = '';
+
+    html += renderDormantCallout(job);
+
+    html += '<dl class="def-list">';
+    html += '<div><dt>Effective</dt><dd><code class="cron-chip">' + escapeHtml(job.cron) + '</code> <span style="color:var(--text-tertiary)">' + escapeHtml(describeCron(job.cron)) + '</span>' +
+      (activeOverride ? ' <span class="pill pill-info" style="font-size:10.5px;padding:2px 8px">override</span>' : '') + '</dd></div>';
+    html += '<div><dt>Code default</dt><dd><code class="cron-chip">' + escapeHtml(job.cronDefault || "") + '</code> <span style="color:var(--text-tertiary)">' + escapeHtml(describeCron(job.cronDefault)) + '</span></dd></div>';
+    html += '<div><dt>Time zone</dt><dd>' + escapeHtml(job.timeZoneId || "UTC") + '</dd></div>';
+    if (job.override) {
+      html += '<div><dt>Override set</dt><dd>by ' + escapeHtml(job.override.updatedBy || "unknown") + ' · ' + escapeHtml(fmtRel(job.override.updatedAt) || "") +
+        (job.override.reason ? '<div style="color:var(--text-tertiary);margin-top:3px">' + escapeHtml(job.override.reason) + '</div>' : '') + '</dd></div>';
+    }
+    html += '</dl>';
+
+    var cronValid = state.cronDraft.trim().split(/\s+/).length >= 5;
+    var reasonValid = state.cronReasonDraft.trim().length > 0;
+    html += '<div class="drawer-section-title" style="margin-top:24px">' + icon("history", 15) + (activeOverride ? 'Change override' : 'Set override') + '</div>';
+    html += '<div style="display:grid;gap:14px">';
+    html += '<div><div class="reason-label">Cron expression <span style="color:var(--danger-text)">*</span></div>' +
+      '<input id="cron-input" class="cron-input" data-action="cron-input" value="' + escapeAttr(state.cronDraft) + '" placeholder="' + escapeAttr(job.cron) + '" spellcheck="false">' +
+      '<div class="cron-human" id="cron-preview">' + (state.cronDraft.trim() ? escapeHtml(describeCron(state.cronDraft)) : '&nbsp;') + '</div></div>';
+    html += '<div><div class="reason-label">Reason <span style="color:var(--danger-text)">*</span></div>' +
+      '<textarea id="cron-reason-input" class="reason-input" data-action="cron-reason-input" rows="2" placeholder="e.g. Sweep twice as often while the backlog drains">' + escapeHtml(state.cronReasonDraft) + '</textarea></div>';
+    if (state.scheduleError) html += '<div class="modal-error" style="margin-top:0">' + escapeHtml(state.scheduleError) + '</div>';
+    html += '<div style="display:flex;gap:10px">' +
+      '<button class="btn-navy-fill" style="height:40px;padding:0 20px" data-action="apply-cron" data-id="' + id + '"' + (!cronValid || !reasonValid || state.scheduleBusy ? ' disabled' : '') + '>Apply override</button>' +
+      (job.override && job.override.cron ? '<button class="btn-ghost-ring" style="height:40px" data-action="reset-cron" data-id="' + id + '"' + (state.scheduleBusy ? ' disabled' : '') + '>Reset to code default</button>' : '') +
+      '</div>';
+    html += '</div>';
+    html += '<p class="footnote" style="margin-top:20px">The override is validated and applied through Hangfire itself, then stored durably — deploys re-assert it until reset. If the job disappears from code the override goes dormant (kept, not deleted) and resumes if a rollback brings the job back.</p>';
+    return html;
+  }
+
+  // Shared by the Schedule/Parameters tabs — the row projects as a unit, so a dormant override
+  // means the code defaults (schedule and parameter values) run regardless of which part broke.
+  function renderDormantCallout(job) {
+    if (!overrideInvalidated(job)) return '';
+    var stored = job.override.cron
+      ? 'The stored expression <code class="cron-chip">' + escapeHtml(job.override.cron) + '</code>'
+      : 'The stored override';
+    return '<div class="callout-warning">' + icon("error", 20) + '<div>' +
+      '<div class="title">Stored override is dormant (' + escapeHtml(job.override.invalidatedReason || "invalidated") + ')</div>' +
+      '<div class="body">' + stored + ' no longer applies, so the code defaults are running — schedule and parameter values both. Apply a new override or reset to clear it.</div></div></div>';
+  }
+
+  // ---------- parameter form (shared by the Parameters and Invoke tabs) ----------
+  // What input a parameter renders as, from its schema type. Unrecognized types (arrays, option
+  // objects) edit as raw JSON — the server binds them with System.Text.Json, so JSON is the honest
+  // input format.
+  function paramInputKind(parameter) {
+    if (!parameter.editable) return "readonly";
+    if (parameter.enumValues) return "enum";
+    var t = parameter.type.replace(/\?$/, "");
+    if (["int", "long", "short", "byte", "sbyte", "uint", "ulong", "ushort", "double", "float", "decimal"].indexOf(t) !== -1) return "number";
+    if (t === "bool") return "bool";
+    if (["string", "char", "Guid", "DateTime", "DateTimeOffset", "TimeSpan"].indexOf(t) !== -1) return "text";
+    return "json";
+  }
+  // JSON value -> input draft string. Strings edit raw (no quotes); everything else edits as its
+  // JSON text.
+  function paramValueToDraft(parameter, value) {
+    if (value === null || value === undefined) return "";
+    if (typeof value === "string") return value;
+    return JSON.stringify(value);
+  }
+  function paramDisplay(parameter, value) {
+    if (value === null || value === undefined) return "—";
+    return typeof value === "string" ? value : JSON.stringify(value);
+  }
+  // Pre-fill only stored override values; a blank field is "no value submitted" (the code default on
+  // the Parameters tab; the effective value on Invoke, where the server overlays stored args itself).
+  // Pre-filling effective values instead would pin every code default into the override on submit.
+  function initDrafts(view) {
+    var drafts = {};
+    view.parameters.forEach(function (parameter) {
+      if (parameter.editable) drafts[parameter.name] = paramValueToDraft(parameter, parameter.overrideValue);
+    });
+    return drafts;
+  }
+  // Drafts -> the args object to submit. A blank input means "code default" and is omitted (the
+  // server's per-parameter fallback). Returns { args, count, errors }.
+  function collectArgs(view, drafts) {
+    var args = {}, count = 0, errors = [];
+    view.parameters.forEach(function (parameter) {
+      if (!parameter.editable) return;
+      var draft = drafts[parameter.name];
+      if (draft === undefined || String(draft).trim() === "") return;
+      var trimmed = String(draft).trim();
+      var kind = paramInputKind(parameter);
+      var value;
+      if (kind === "number") {
+        value = Number(trimmed);
+        if (!isFinite(value)) { errors.push("parameter '" + parameter.name + "': not a number"); return; }
+      } else if (kind === "bool") {
+        value = trimmed === "true";
+      } else if (kind === "json") {
+        try { value = JSON.parse(trimmed); }
+        catch (e) { errors.push("parameter '" + parameter.name + "': not valid JSON"); return; }
+      } else {
+        value = trimmed;
+      }
+      args[parameter.name] = value;
+      count++;
+    });
+    return { args: args, count: count, errors: errors };
+  }
+  function renderParamFields(view, drafts, draftAction) {
+    var html = '';
+    view.parameters.forEach(function (parameter) {
+      var kind = paramInputKind(parameter);
+      var name = escapeAttr(parameter.name);
+      var inputId = draftAction + "-" + parameter.name;
+      html += '<div>';
+      html += '<div class="reason-label">' + escapeHtml(parameter.name) +
+        ' <span style="font-family:var(--mono);font-weight:400;color:var(--text-tertiary)">' + escapeHtml(parameter.type) + '</span></div>';
+      if (kind === "readonly") {
+        html += '<div class="cron-human" style="margin-top:0">Provided by the server at run time — not operator-editable.</div>';
+      } else {
+        var draft = drafts[parameter.name] === undefined ? "" : drafts[parameter.name];
+        if (kind === "enum" || kind === "bool") {
+          var options = kind === "bool" ? ["true", "false"] : parameter.enumValues;
+          html += '<select id="' + escapeAttr(inputId) + '" class="cron-input" style="font-family:inherit" data-action="' + draftAction + '" data-param="' + name + '">';
+          html += '<option value=""' + (draft === "" ? ' selected' : '') + '>(code default)</option>';
+          options.forEach(function (option) {
+            html += '<option value="' + escapeAttr(option) + '"' + (draft === option ? ' selected' : '') + '>' + escapeHtml(option) + '</option>';
+          });
+          html += '</select>';
+        } else {
+          html += '<input id="' + escapeAttr(inputId) + '" class="cron-input"' + (kind === "number" || kind === "json" ? '' : ' style="font-family:inherit"') +
+            ' data-action="' + draftAction + '" data-param="' + name + '" value="' + escapeAttr(draft) + '" placeholder="(code default)" spellcheck="false">';
+        }
+        html += '<div class="cron-human">code default: ' + escapeHtml(paramDisplay(parameter, parameter.codeDefault)) +
+          (parameter.overrideValue !== null && parameter.overrideValue !== undefined ? ' · stored override: ' + escapeHtml(paramDisplay(parameter, parameter.overrideValue)) : '') + '</div>';
+      }
+      html += '</div>';
+    });
+    return html;
+  }
+  function renderParamsLoadState(job) {
+    var p = state.params;
+    if (p.loadError) return '<div style="color:var(--danger-text);font-size:13px">' + escapeHtml(p.loadError) + '</div>';
+    if (p.loading || p.jobId !== job.id || !p.view) return '<div style="color:var(--text-tertiary);font-size:13px">Loading parameters…</div>';
+    return null;
+  }
+
+  function renderParametersTab(job) {
+    var id = escapeAttr(job.id);
+    var html = renderDormantCallout(job);
+    var loadState = renderParamsLoadState(job);
+    if (loadState !== null) return html + loadState;
+    var view = state.params.view;
+
+    if (view.parameters.filter(function (parameter) { return parameter.editable; }).length === 0) {
+      html += '<div class="empty-state" style="padding:36px 12px">This job\'s method takes no parameters — there is nothing to override.</div>';
+      return html;
+    }
+
+    var reasonValid = state.paramReasonDraft.trim().length > 0;
+    var collected = collectArgs(view, state.paramDrafts);
+    html += '<div class="drawer-section-title" style="margin-top:4px">' + icon("history", 15) + (hasActiveArgsOverride(job) ? 'Change parameter override' : 'Set parameter override') + '</div>';
+    html += '<div style="display:grid;gap:14px">';
+    html += renderParamFields(view, state.paramDrafts, "param-draft");
+    html += '<div><div class="reason-label">Reason <span style="color:var(--danger-text)">*</span></div>' +
+      '<textarea id="param-reason-input" class="reason-input" data-action="param-reason-input" rows="2" placeholder="e.g. Smaller batches while the provider backlog drains">' + escapeHtml(state.paramReasonDraft) + '</textarea></div>';
+    if (state.paramsError) html += '<div class="modal-error" style="margin-top:0">' + escapeHtml(state.paramsError) + '</div>';
+    html += '<div style="display:flex;gap:10px">' +
+      '<button class="btn-navy-fill" style="height:40px;padding:0 20px" data-action="apply-args" data-id="' + id + '"' + (collected.count === 0 || !reasonValid || state.paramsBusy ? ' disabled' : '') + '>Apply override</button>' +
+      (job.override && job.override.argsJson ? '<button class="btn-ghost-ring" style="height:40px" data-action="reset-args" data-id="' + id + '"' + (state.paramsBusy ? ' disabled' : '') + '>Reset to code defaults</button>' : '') +
+      '</div>';
+    html += '</div>';
+    html += '<p class="footnote" style="margin-top:20px">Values are validated against the method signature, applied through Hangfire, then stored durably — scheduled fires use them and deploys re-assert them until reset. A blank field means the code default; if the method\'s signature changes the override goes dormant (kept, not deleted).</p>';
+    return html;
+  }
+
+  function renderInvokeTab(job) {
+    var id = escapeAttr(job.id);
+    var html = '';
+    if (isDisabled(job)) {
+      html += '<div class="callout-warning">' + icon("pauseCircle", 20) + '<div>' +
+        '<div class="title">This job is disabled — an invoke runs anyway</div>' +
+        '<div class="body">Invoke creates a one-off run that bypasses the disable skip (the intended force-run). Scheduled fires stay skipped.</div></div></div>';
+    }
+    var loadState = renderParamsLoadState(job);
+    if (loadState !== null) return html + loadState;
+    var view = state.params.view;
+
+    var editable = view.parameters.filter(function (parameter) { return parameter.editable; });
+    var collected = collectArgs(view, state.invokeDrafts);
+    var reasonNeeded = state.invokePersist;
+    var reasonValid = !reasonNeeded || state.invokeReasonDraft.trim().length > 0;
+
+    html += '<div class="drawer-section-title" style="margin-top:4px">' + icon("bolt", 15) + 'Run now with these values</div>';
+    html += '<div style="display:grid;gap:14px">';
+    if (editable.length === 0) {
+      html += '<div style="color:var(--text-tertiary);font-size:13px">This job\'s method takes no parameters — the run uses the method as-is.</div>';
+    } else {
+      html += renderParamFields(view, state.invokeDrafts, "invoke-draft");
+    }
+    if (editable.length > 0) {
+      html += '<label style="display:flex;align-items:flex-start;gap:9px;font-size:13px;color:var(--text-secondary);cursor:pointer">' +
+        '<input type="checkbox" data-action="invoke-persist" style="margin-top:2px"' + (state.invokePersist ? ' checked' : '') + '>' +
+        '<span><b>Also store these values as the parameter override</b><br><span style="color:var(--text-tertiary)">Scheduled fires adopt them until reset. Off: this run only.</span></span></label>';
+      if (reasonNeeded) {
+        html += '<div><div class="reason-label">Reason <span style="color:var(--danger-text)">*</span></div>' +
+          '<textarea id="invoke-reason-input" class="reason-input" data-action="invoke-reason-input" rows="2" placeholder="Why the stored values are changing">' + escapeHtml(state.invokeReasonDraft) + '</textarea></div>';
+      }
+    }
+    if (state.invokeError) html += '<div class="modal-error" style="margin-top:0">' + escapeHtml(state.invokeError) + '</div>';
+    html += '<div style="display:flex;gap:10px">' +
+      '<button class="btn-navy-fill" style="height:40px;padding:0 20px" data-action="do-invoke" data-id="' + id + '"' + (!reasonValid || state.invokeBusy ? ' disabled' : '') + '>' + icon("bolt", 16) + ' Run now</button>' +
+      '</div>';
+    html += '</div>';
+    html += '<p class="footnote" style="margin-top:20px">Unlike "Trigger now" (which is skipped for a disabled job), invoke creates an ad-hoc run and always executes. A blank field uses the job\'s effective value (stored override, else code default). Every invoke is audited with the values used.</p>';
     return html;
   }
 
@@ -828,6 +1216,35 @@
       });
   }
 
+  function loadParams(jobId) {
+    var p = state.params;
+    p.jobId = jobId;
+    p.loading = true;
+    p.loadError = null;
+    p.view = null;
+    render();
+    fetch(API_BASE + "/" + encodeURIComponent(jobId) + "/parameters", { credentials: "same-origin" })
+      .then(function (res) {
+        if (!res.ok) throw new Error("Failed to load parameters (HTTP " + res.status + ")");
+        return res.json();
+      })
+      .then(normalizeKeys)
+      .then(function (view) {
+        if (state.params.jobId !== jobId) return; // drawer moved to a different job (or closed) meanwhile
+        p.view = view;
+        p.loading = false;
+        state.paramDrafts = initDrafts(view);
+        state.invokeDrafts = initDrafts(view);
+        render();
+      })
+      .catch(function (err) {
+        if (state.params.jobId !== jobId) return;
+        p.loading = false;
+        p.loadError = err.message;
+        render();
+      });
+  }
+
   function apiPost(jobId, action, body) {
     return fetch(API_BASE + "/" + encodeURIComponent(jobId) + "/" + action, {
       method: "POST",
@@ -897,6 +1314,92 @@
       .catch(function (err) { state.modalBusy = false; state.modalError = err.message; render(); });
   }
 
+  function applyCron(jobId) {
+    var cron = state.cronDraft.trim(), reason = state.cronReasonDraft.trim();
+    if (!cron || !reason) return;
+    state.scheduleBusy = true; state.scheduleError = null; render();
+    apiPost(jobId, "cron", { cron: cron, reason: reason })
+      .then(function () {
+        state.scheduleBusy = false; state.cronDraft = ""; state.cronReasonDraft = "";
+        loadJobs(); loadActivity(); loadJobHistory(jobId);
+        showToast("Schedule override applied to '" + jobId + "'", "checkCircle");
+      })
+      .catch(function (err) { state.scheduleBusy = false; state.scheduleError = err.message; render(); });
+  }
+  function resetCron(jobId) {
+    state.scheduleBusy = true; state.scheduleError = null; render();
+    apiPost(jobId, "cron/reset", {})
+      .then(function () {
+        state.scheduleBusy = false;
+        loadJobs(); loadActivity(); loadJobHistory(jobId);
+        showToast("'" + jobId + "' is back on its code-default schedule", "checkCircle");
+      })
+      .catch(function (err) { state.scheduleBusy = false; state.scheduleError = err.message; render(); });
+  }
+  function applyArgs(jobId) {
+    var collected = collectArgs(state.params.view, state.paramDrafts);
+    if (collected.errors.length) { state.paramsError = collected.errors.join("; "); render(); return; }
+    var reason = state.paramReasonDraft.trim();
+    if (collected.count === 0 || !reason) return;
+    state.paramsBusy = true; state.paramsError = null; render();
+    apiPost(jobId, "args", { args: collected.args, reason: reason })
+      .then(function () {
+        state.paramsBusy = false; state.paramReasonDraft = "";
+        loadJobs(); loadActivity(); loadJobHistory(jobId); loadParams(jobId);
+        showToast("Parameter override applied to '" + jobId + "'", "checkCircle");
+      })
+      .catch(function (err) { state.paramsBusy = false; state.paramsError = err.message; render(); });
+  }
+  function resetArgs(jobId) {
+    state.paramsBusy = true; state.paramsError = null; render();
+    apiPost(jobId, "args/reset", {})
+      .then(function () {
+        state.paramsBusy = false;
+        loadJobs(); loadActivity(); loadJobHistory(jobId); loadParams(jobId);
+        showToast("'" + jobId + "' is back on its code-default parameters", "checkCircle");
+      })
+      .catch(function (err) { state.paramsBusy = false; state.paramsError = err.message; render(); });
+  }
+  function doInvoke(jobId) {
+    var collected = collectArgs(state.params.view, state.invokeDrafts);
+    if (collected.errors.length) { state.invokeError = collected.errors.join("; "); render(); return; }
+    var persist = state.invokePersist;
+    var reason = state.invokeReasonDraft.trim();
+    if (persist && !reason) return;
+    state.invokeBusy = true; state.invokeError = null; render();
+    apiPost(jobId, "invoke", { args: collected.args, persist: persist, reason: reason || null })
+      .then(function () {
+        state.invokeBusy = false;
+        loadActivity(); loadJobHistory(jobId);
+        if (persist) {
+          state.invokeReasonDraft = ""; state.invokePersist = false;
+          loadJobs(); loadParams(jobId);
+        } else {
+          render();
+        }
+        showToast(persist ? "Invoked '" + jobId + "' and stored the values" : "Invoked '" + jobId + "'", "bolt");
+      })
+      .catch(function (err) { state.invokeBusy = false; state.invokeError = err.message; render(); });
+  }
+  function doReconcile() {
+    fetch(API_BASE + "/reconcile", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" } })
+      .then(function (res) {
+        if (!res.ok) return res.text().then(function (t) { throw new Error(t || ("Request failed with HTTP " + res.status)); });
+        return res.json();
+      })
+      .then(normalizeKeys)
+      .then(function (summary) {
+        loadJobs(); loadActivity();
+        var bits = [summary.projected + " projected"];
+        if (summary.overriddenJobIds.length) bits.push(summary.overriddenJobIds.length + " overridden");
+        if (summary.invalidatedJobIds.length) bits.push(summary.invalidatedJobIds.length + " invalidated");
+        if (summary.revalidatedJobIds.length) bits.push(summary.revalidatedJobIds.length + " revalidated");
+        if (summary.errors.length) bits.push(summary.errors.length + " errors");
+        showToast("Reconciled — " + bits.join(", "), summary.errors.length ? "error" : "checkCircle");
+      })
+      .catch(function (err) { showToast("Reconcile failed: " + err.message, "error"); });
+  }
+
   // ---------- event delegation ----------
   document.addEventListener("click", function (event) {
     // Background dismiss: only when the click lands directly on the scrim itself, not a bubbled
@@ -915,9 +1418,9 @@
 
     switch (action) {
     case "refresh": loadJobs(); loadActivity(); showToast("Reloaded from storage", "refresh"); break;
-    case "filter": state.filter = target.getAttribute("data-filter"); render(); break;
+    case "filter": state.filter = target.getAttribute("data-filter"); syncUrl(); render(); break;
     case "clear-search": state.search = ""; render(); break;
-    case "clear-view": state.search = ""; state.filter = "all"; render(); break;
+    case "clear-view": state.search = ""; state.filter = "all"; syncUrl(); render(); break;
     case "expand-banner": state.bannerExpanded = true; render(); break;
     case "sort":
       var sortKey = target.getAttribute("data-key");
@@ -935,7 +1438,31 @@
       render();
       if (undoFn) undoFn();
       break;
-    case "open-detail": state.detailId = id; state.openMenuId = null; state.drawerSettled = false; loadJobHistory(id); break;
+    case "open-detail":
+      state.detailId = id; state.openMenuId = null; state.drawerSettled = false; state.drawerTab = "overview";
+      state.cronDraft = ""; state.cronReasonDraft = ""; state.scheduleError = null;
+      state.params = { jobId: null, view: null, loading: false, loadError: null };
+      state.paramDrafts = {}; state.paramReasonDraft = ""; state.paramsError = null;
+      state.invokeDrafts = {}; state.invokePersist = false; state.invokeReasonDraft = ""; state.invokeError = null;
+      loadJobHistory(id);
+      break;
+    case "drawer-tab":
+      state.drawerTab = target.getAttribute("data-tab");
+      state.scheduleError = null; state.paramsError = null; state.invokeError = null;
+      // The two parameter-driven tabs share one schema fetch, done lazily on first entry.
+      if ((state.drawerTab === "parameters" || state.drawerTab === "invoke") && state.params.jobId !== state.detailId) {
+        loadParams(state.detailId);
+      } else {
+        render();
+      }
+      break;
+    case "apply-cron": applyCron(id); break;
+    case "reset-cron": resetCron(id); break;
+    case "apply-args": applyArgs(id); break;
+    case "reset-args": resetArgs(id); break;
+    case "do-invoke": doInvoke(id); break;
+    case "invoke-persist": state.invokePersist = target.checked; render(); break;
+    case "reconcile": doReconcile(); break;
     case "close-detail": state.detailId = null; render(); break;
     case "toggle-menu": event.stopPropagation(); state.openMenuId = state.openMenuId === id ? null : id; render(); break;
     case "close-menu": state.openMenuId = null; render(); break;
@@ -975,6 +1502,46 @@
       var confirmBtn = document.querySelector('[data-action="confirm-disable"]');
       if (confirmBtn) confirmBtn.disabled = state.reasonDraft.trim().length === 0 || state.modalBusy;
     }
+    // Same no-full-render rule as reason-input: per keystroke only the apply button's disabled state
+    // and the human-readable cron preview change.
+    else if (event.target.getAttribute("data-action") === "cron-input" || event.target.getAttribute("data-action") === "cron-reason-input") {
+      if (event.target.getAttribute("data-action") === "cron-input") {
+        state.cronDraft = event.target.value;
+        var preview = document.getElementById("cron-preview");
+        if (preview) preview.innerHTML = state.cronDraft.trim() ? escapeHtml(describeCron(state.cronDraft)) : "&nbsp;";
+      } else {
+        state.cronReasonDraft = event.target.value;
+      }
+      var applyBtn = document.querySelector('[data-action="apply-cron"]');
+      if (applyBtn) {
+        var cronOk = state.cronDraft.trim().split(/\s+/).length >= 5;
+        applyBtn.disabled = !cronOk || state.cronReasonDraft.trim().length === 0 || state.scheduleBusy;
+      }
+    }
+    // Parameter-form fields (inputs and selects) — same rule: update drafts and button state only.
+    else if (event.target.getAttribute("data-action") === "param-draft" || event.target.getAttribute("data-action") === "param-reason-input") {
+      if (event.target.getAttribute("data-action") === "param-draft") {
+        state.paramDrafts[event.target.getAttribute("data-param")] = event.target.value;
+      } else {
+        state.paramReasonDraft = event.target.value;
+      }
+      var argsBtn = document.querySelector('[data-action="apply-args"]');
+      if (argsBtn && state.params.view) {
+        var collected = collectArgs(state.params.view, state.paramDrafts);
+        argsBtn.disabled = collected.count === 0 || state.paramReasonDraft.trim().length === 0 || state.paramsBusy;
+      }
+    }
+    else if (event.target.getAttribute("data-action") === "invoke-draft" || event.target.getAttribute("data-action") === "invoke-reason-input") {
+      if (event.target.getAttribute("data-action") === "invoke-draft") {
+        state.invokeDrafts[event.target.getAttribute("data-param")] = event.target.value;
+      } else {
+        state.invokeReasonDraft = event.target.value;
+      }
+      var invokeBtn = document.querySelector('[data-action="do-invoke"]');
+      if (invokeBtn) {
+        invokeBtn.disabled = (state.invokePersist && state.invokeReasonDraft.trim().length === 0) || state.invokeBusy;
+      }
+    }
   });
 
   document.addEventListener("keydown", function (event) {
@@ -1004,6 +1571,7 @@
     if (!state.modal && !state.openMenuId) render();
   }, 60000);
 
+  readUrlState();
   loadJobs();
   loadActivity();
 })();

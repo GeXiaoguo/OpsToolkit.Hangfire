@@ -130,7 +130,10 @@ public static class AuditStore
     /// <summary>
     /// The recurring-job id a background job was created from, if any — Hangfire's own
     /// <c>RecurringJobId</c> job parameter (stamped by <c>RecurringJobExtensions.TriggerRecurringJob</c>,
-    /// not this library). Read back so a run-level audit entry (cancel/requeue/delete-run/cancel-ack/
+    /// not this library), falling back to this library's own manual-invoke stamp
+    /// (<see cref="JobControlEndpoints.ManualInvokeOfParameterName"/>) so a run created by the invoke
+    /// endpoint correlates to its recurring definition the same way a scheduled run does. Read back so
+    /// a run-level audit entry (cancel/requeue/delete-run/cancel-ack/
     /// abort-observed) can carry <c>Detail["RecurringJobId"]</c> — §5's recurring correlation, the
     /// read-side counterpart of the trigger endpoint's own <c>Detail["BackgroundJobId"]</c> seed.
     /// </summary>
@@ -147,6 +150,8 @@ public static class AuditStore
     public static string? TryGetRecurringJobId(IStorageConnection connection, string jobId)
     {
         var raw = connection.GetJobParameter(jobId, "RecurringJobId");
+        if (string.IsNullOrEmpty(raw))
+            raw = connection.GetJobParameter(jobId, JobControlEndpoints.ManualInvokeOfParameterName);
         if (string.IsNullOrEmpty(raw)) return null;
 
         try

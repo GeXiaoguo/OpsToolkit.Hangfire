@@ -83,6 +83,11 @@
   .pill-neutral { background: var(--surface); color: var(--text-secondary); }
   .exc-type { font-family: var(--mono); font-size: 12px; color: var(--danger-text); }
   .exc-message { font-size: 12.5px; color: var(--text-tertiary); margin-top: 2px; max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .beat-bar-track { width: 130px; height: 4px; border-radius: 999px; background: var(--surface); box-shadow: inset 0 0 0 1px var(--hairline); overflow: hidden; }
+  .beat-bar-fill { height: 100%; border-radius: 999px; background: var(--secondary-blue); }
+  .beat-message { font-size: 12px; color: var(--text-secondary); margin-top: 4px; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .beat-meta { font-size: 11.5px; color: var(--text-tertiary); margin-top: 3px; }
+  .beat-overdue { color: var(--warning-text); font-weight: 600; }
   .empty-state { padding: 56px 24px; text-align: center; color: var(--text-tertiary); font-size: 14px; }
   .load-more-row td { text-align: center; padding: 16px; }
   .btn-ghost-ring { height: 32px; padding: 0 14px; border: none; box-shadow: inset 0 0 0 1.5px var(--hairline); background: transparent; color: var(--text-secondary); border-radius: 999px; font-weight: 600; font-size: 13px; }
@@ -192,7 +197,7 @@
   // sample data so the page can be developed and reviewed standalone. Dead code in production.
   if (API_BASE.charAt(0) === "{") (function () {
     function iso(ms) { return new Date(Date.now() + ms).toISOString(); }
-    var stats = { enqueued: 3, processing: 2, scheduled: 4, succeeded: 1284, failed: 2, deleted: 12, servers: 2 };
+    var stats = { enqueued: 3, processing: 3, scheduled: 4, succeeded: 1284, failed: 2, deleted: 12, servers: 2 };
     var lists = {
       enqueued: [
         { id: "882540", jobDisplayName: "PaymentJobs.RetryFailedPayments", enqueuedAt: iso(-40 * 1000) },
@@ -200,8 +205,12 @@
         { id: "882542", jobDisplayName: "QuoteJobs.ExpireStaleQuotes", enqueuedAt: iso(-5 * MIN) },
       ],
       processing: [
-        { id: "882535", jobDisplayName: "LedgerJobs.ReconcileLoanBook", serverId: "app-01:4821", startedAt: iso(-14 * MIN) },
-        { id: "882538", jobDisplayName: "ReportingJobs.GenerateMonthlyStatements", serverId: "app-02:4822", startedAt: iso(-90 * 1000) },
+        { id: "882535", jobDisplayName: "LedgerJobs.ReconcileLoanBook", serverId: "app-01:4821", startedAt: iso(-14 * MIN),
+          beat: { lastBeatAt: iso(-9 * 1000), percent: 62.5, message: "loan book batch 5/8", timeoutSeconds: 300, overdue: false, stalled: false, acknowledged: false } },
+        { id: "882538", jobDisplayName: "ReportingJobs.GenerateMonthlyStatements", serverId: "app-02:4822", startedAt: iso(-90 * 1000),
+          beat: { lastBeatAt: iso(-80 * 1000), percent: null, message: null, timeoutSeconds: 60, overdue: true, stalled: false, acknowledged: false } },
+        { id: "882539", jobDisplayName: "LedgerJobs.RebuildPositions", serverId: "app-02:4822", startedAt: iso(-40 * MIN),
+          beat: { lastBeatAt: iso(-12 * MIN), percent: 35, message: "positions batch 7/20", timeoutSeconds: 300, overdue: true, stalled: true, acknowledged: false } },
       ],
       scheduled: [
         { id: "882545", jobDisplayName: "CreditJobs.RefreshBureauFiles", enqueueAt: iso(2 * HR) },
@@ -219,8 +228,9 @@
         { id: "881904", jobDisplayName: "LedgerJobs.ReconcileLoanBook", failedAt: iso(-37 * HR), exceptionType: "Npgsql.NpgsqlException", exceptionMessage: "Exception while reading from stream" },
       ],
       deleted: [
-        { id: "882501", jobDisplayName: "LedgerJobs.ReconcileLoanBook", deletedAt: iso(-25 * MIN), cancelled: true, cancelledBy: "m.chen", cancelledAt: iso(-25 * MIN) },
-        { id: "882388", jobDisplayName: "QuoteJobs.ExpireStaleQuotes", deletedAt: iso(-4 * HR), cancelled: false },
+        { id: "882501", jobDisplayName: "LedgerJobs.ReconcileLoanBook", deletedAt: iso(-25 * MIN), cancelled: true, cancelledBy: "m.chen", cancelledAt: iso(-25 * MIN), stallPhase: null },
+        { id: "882440", jobDisplayName: "ReportingJobs.GenerateMonthlyStatements", deletedAt: iso(-50 * MIN), cancelled: true, cancelledBy: "system:liveness", cancelledAt: iso(-50 * MIN), stallPhase: "blocked" },
+        { id: "882388", jobDisplayName: "QuoteJobs.ExpireStaleQuotes", deletedAt: iso(-4 * HR), cancelled: false, stallPhase: null },
       ],
       servers: [
         { name: "app-01:4821", workersCount: 20, queues: ["critical", "default"], startedAt: iso(-6 * DAY), heartbeat: iso(-8 * 1000) },
@@ -228,6 +238,17 @@
       ],
     };
     var queues = [{ name: "default", length: 3 }, { name: "critical", length: 0 }];
+    var stalledSample = {
+      detector: { status: "healthy", lastScanAt: iso(-6 * 1000), servers: [{ serverId: "app-01:4821:detector", lastScanAt: iso(-6 * 1000), scanIntervalSeconds: 30, fresh: true }] },
+      activeContractCount: 2,
+      acknowledgedCount: 0,
+      unacknowledgedCount: 1,
+      items: [{
+        id: "882539", jobDisplayName: "LedgerJobs.RebuildPositions", executionId: "a41f09c2", serverId: "app-02:4822",
+        startedAt: iso(-40 * MIN), stalledAt: iso(-7 * MIN), lastBeatAt: iso(-12 * MIN), seq: 8, percent: 35,
+        message: "positions batch 7/20", timeoutSeconds: 300, acknowledged: false, acknowledgedBy: null, acknowledgedAt: null, acknowledgeReason: null,
+      }],
+    };
     var auditByJob = {
       "882501": [
         { at: iso(-24 * MIN), actor: "worker", action: "cancel-ack", jobId: "882501", reason: null, outcome: "ok", detail: { result: "aborted", elapsedMs: "2900" } },
@@ -263,6 +284,7 @@
       if (!opts || !opts.method || opts.method === "GET") {
         if (path === "/stats") return ok(stats);
         if (path === "/queues") return ok(queues);
+        if (path === "/stalled") return ok(stalledSample);
         var listKey = path.replace(/^\//, "");
         if (lists[listKey]) return ok(lists[listKey]);
         var m = /^\/([^\/]+)\/audit$/.exec(path);
@@ -273,6 +295,19 @@
       }
       var parts = path.replace(/^\//, "").split("/");
       var jobId = decodeURIComponent(parts[0]), action = parts[1];
+      if (action === "force-requeue") action = "requeue"; // preview: same row movement as an ordinary requeue
+      if (action === "acknowledge-stall") {
+        stalledSample.items.forEach(function (item) {
+          if (item.id !== jobId) return;
+          item.acknowledged = true; item.acknowledgedBy = "preview-user"; item.acknowledgedAt = iso(0);
+        });
+        stalledSample.acknowledgedCount = stalledSample.items.filter(function (i) { return i.acknowledged; }).length;
+        stalledSample.unacknowledgedCount = stalledSample.items.length - stalledSample.acknowledgedCount;
+        lists.processing.forEach(function (row) {
+          if (row.id === jobId && row.beat) row.beat.acknowledged = true;
+        });
+        return ok(null);
+      }
       Object.keys(lists).forEach(function (k) {
         if (k === "servers") return;
         for (var i = lists[k].length - 1; i >= 0; i--) {
@@ -336,11 +371,13 @@
     detailLoading: false,
     detailError: null,
     detailAudit: { entries: [], loading: false, loadError: null }, // this job's cancel/cancel-ack history
+    stalledOnly: false,  // Processing-tab filter: show flagged executions only
+    stalledInfo: null,   // GET /stalled payload — detector health + flags (loaded with the Processing tab)
     cancelModal: null,   // { jobId, expectedState } | null
     cancelReasonDraft: "",
     cancelModalError: null,
     cancelModalBusy: false,
-    actionModal: null,   // { kind: "requeue"|"delete", jobId, expectedState } | null
+    actionModal: null,   // { kind: "requeue"|"delete"|"acknowledge", jobId, expectedState } | null
     actionReasonDraft: "",
     actionModalError: null,
     actionModalBusy: false,
@@ -353,6 +390,25 @@
   function tabState(tab) {
     if (!state.data[tab]) state.data[tab] = { rows: [], loading: false, loadError: null, exhausted: false };
     return state.data[tab];
+  }
+
+  // ---------- URL state ----------
+  // The active tab (and queue, for Queued) is mirrored into the location hash so a refresh, shared
+  // link, or bookmark reopens the same view instead of falling back to the default tab. The hash is
+  // used rather than the query string so view state never reaches server-side route matching.
+  function readUrlState() {
+    var params = new URLSearchParams(location.hash.slice(1));
+    var tab = params.get("tab");
+    if (tab && TABS.some(function (t) { return t.key === tab; })) state.tab = tab;
+    var queue = params.get("queue");
+    if (queue) state.selectedQueue = queue;
+  }
+  function syncUrl() {
+    var params = new URLSearchParams();
+    params.set("tab", state.tab);
+    if (state.tab === "enqueued" && state.selectedQueue) params.set("queue", state.selectedQueue);
+    var hash = "#" + params.toString();
+    if (location.hash !== hash) history.replaceState(null, "", hash);
   }
 
   // ---------- icons (inline Material Icons paths — no external asset/CDN dependency) ----------
@@ -482,6 +538,11 @@
     html += '<div class="toolbar">';
     if (state.tab === "enqueued") {
       html += '<div class="queue-picker">Queue ' + renderQueuePicker() + '</div>';
+    } else if (state.tab === "processing") {
+      var stalledCount = tabState("processing").rows.filter(function (r) { return r.beat && r.beat.stalled; }).length;
+      html += '<button class="btn-ghost-ring" data-action="toggle-stalled-only" aria-pressed="' + state.stalledOnly + '"' +
+        (state.stalledOnly ? ' style="box-shadow:inset 0 0 0 1.5px var(--danger-text);color:var(--danger-text)"' : '') + '>' +
+        icon("error", 15) + 'Stalled only' + (stalledCount > 0 ? ' (' + stalledCount + ')' : '') + '</button>';
     } else {
       html += '<div></div>';
     }
@@ -491,7 +552,7 @@
     html += '</div>';
 
     html += renderTabBody();
-    html += '<p class="footnote">Read view over Hangfire’s monitoring API — the same data the built-in dashboard renders from. Cancel, requeue, and delete are all governed here (audited; cancel requires a reason). A running job can only be cancelled — requeue of Processing is refused to avoid a concurrent double-run.</p>';
+    html += '<p class="footnote">Read view over Hangfire’s monitoring API — the same data the built-in dashboard renders from. Cancel, requeue, and delete are all governed here (audited; cancel requires a reason). A running job can only be cancelled — requeue of Processing is refused to avoid a concurrent double-run. Jobs with a [Heartbeat] contract show live progress; a <b>Stalled</b> badge is the stall detector’s confirmed verdict (silence beyond the contract timeout on the detector’s own clock), and Acknowledge records who is on it without clearing the flag. Contracts that opted into stall retry are cancelled and re-run automatically once the cancelled body itself acknowledges — while a stall-cancel is unacknowledged (<b>Awaiting ack</b> or <b>Stall blocked</b>), the body’s fate is unknowable, so ordinary requeue is refused and only the audited Force-requeue break-glass can override.</p>';
     return html;
   }
 
@@ -512,10 +573,22 @@
     if (t.loadError) {
       return '<div id="load-error">' + escapeHtml(t.loadError) + '</div>';
     }
+
+    // Detector health (review F5): a missing/stale scan lease means stalled flags may be stale or
+    // absent — surfaced so an empty stalled view is never mistaken for a healthy all-clear.
+    var degradedNote = "";
+    if (tab === "processing" && state.stalledInfo && state.stalledInfo.detector && state.stalledInfo.detector.status === "degraded") {
+      var lastScan = state.stalledInfo.detector.lastScanAt;
+      degradedNote = '<div style="background:var(--warning-bg);border:1px solid var(--warning-border);color:var(--warning-text);' +
+        'border-radius:10px;padding:10px 14px;font-size:12.5px;margin-bottom:12px">' +
+        icon("error", 14, "vertical-align:-2px;margin-right:6px") +
+        'Stall detector degraded — ' + (lastScan ? 'last scan ' + escapeHtml(fmtRel(lastScan) || "") : 'no scan lease found') +
+        '. Stalled flags may be stale or missing; check that a server registered <code>AddJobControlStallDetector()</code>.</div>';
+    }
     if (t.loading && t.rows.length === 0) {
       // Skeleton mirrors the tab's real column layout so nothing reflows when rows land.
       var skelCols = columnsFor(tab);
-      var skelHtml = '<div class="table-card"><table><thead><tr>';
+      var skelHtml = degradedNote + '<div class="table-card"><table><thead><tr>';
       skelCols.forEach(function (c) { skelHtml += '<th>' + c + '</th>'; });
       skelHtml += '</tr></thead><tbody>';
       for (var r = 0; r < 5; r++) {
@@ -529,19 +602,23 @@
       }
       return skelHtml + '</tbody></table></div>';
     }
-    if (t.rows.length === 0) {
+    var rows = tab === "processing" && state.stalledOnly
+      ? t.rows.filter(function (r) { return r.beat && r.beat.stalled; })
+      : t.rows;
+    if (rows.length === 0) {
       var emptyMsg = tab === "failed" ? "No failed jobs — all clear."
+        : tab === "processing" && state.stalledOnly ? "No stalled executions — the filter is on."
         : tab === "processing" ? "No jobs are running right now."
         : tab === "servers" ? "No servers are connected."
         : "Nothing in " + labelFor(tab).toLowerCase() + " right now.";
-      return '<div class="table-card"><div class="empty-state">' + escapeHtml(emptyMsg) + '</div></div>';
+      return degradedNote + '<div class="table-card"><div class="empty-state">' + escapeHtml(emptyMsg) + '</div></div>';
     }
 
     var cols = columnsFor(tab);
-    var html = '<div class="table-card"><table><thead><tr>';
+    var html = degradedNote + '<div class="table-card"><table><thead><tr>';
     cols.forEach(function (c) { html += '<th>' + c + '</th>'; });
     html += '</tr></thead><tbody>';
-    t.rows.forEach(function (row) { html += renderRow(tab, row); });
+    rows.forEach(function (row) { html += renderRow(tab, row); });
     html += '</tbody>';
     if (!t.exhausted) {
       var statKey = (TABS.filter(function (x) { return x.key === tab; })[0] || {}).statKey;
@@ -563,7 +640,7 @@
   function columnsFor(tab) {
     switch (tab) {
       case "enqueued": return ["Job", "Enqueued", ""];
-      case "processing": return ["Job", "Server", "Started", "Running for", ""];
+      case "processing": return ["Job", "Server", "Started", "Running for", "Progress", ""];
       case "scheduled": return ["Job", "Enqueue at", ""];
       case "succeeded": return ["Job", "Succeeded", "Duration", ""];
       case "failed": return ["Job", "Failed", "Exception", ""];
@@ -599,12 +676,32 @@
     return '<td class="actions-cell" data-stop-row-click="1">' + buttons + '</td>';
   }
 
+  // Processing rows: Cancel like any live tab, plus Acknowledge on a stalled-but-unacknowledged row
+  // (review F8 — records who/why on the flag without clearing it, so alerting stops paging while the
+  // stalled condition honestly remains).
+  function processingActionsCell(row) {
+    var buttons = cancelButton("processing", row.id);
+    if (row.beat && row.beat.stalled && !row.beat.acknowledged) {
+      buttons += '<button class="btn-ghost-ring" data-action="ask-acknowledge" data-id="' + escapeAttr(row.id) + '">' +
+        icon("checkCircle", 15) + 'Acknowledge</button>';
+    }
+    return '<td class="actions-cell" data-stop-row-click="1">' + buttons + '</td>';
+  }
+
   // Deleted rows split on whether they're a governed cancel (§2.4): a plain delete has no live body
   // that might still be running, so its Requeue is offered inline like any other tab. A cancelled row's
   // Requeue is ack-gated (§3.2's requeue-before-ack guard) — the gate needs this job's own audit
   // entries, which only the drawer polls (§3.4's scope note: full live status is drawer-only), so a
   // cancelled row points there instead of duplicating that polling per row in the list.
   function deletedActionsCell(row) {
+    // An unacknowledged stall-cancel — cancel-requested or blocked (OPS-003) — is requeue-guarded by
+    // the API itself (liveness plan §5 Rule 4): the only exit offered here is the audited break-glass,
+    // with its own confirmation and required reason.
+    if (row.stallPhase === "blocked" || row.stallPhase === "cancel-requested") {
+      return '<td class="actions-cell" data-stop-row-click="1">' +
+        '<button class="btn-ghost-ring" data-action="ask-force-requeue" data-id="' + escapeAttr(row.id) + '" style="color:var(--danger-text)">' +
+        icon("replay", 15) + 'Force requeue</button></td>';
+    }
     if (row.cancelled) {
       return '<td class="actions-cell" data-stop-row-click="1"><span style="font-size:12px;color:var(--text-tertiary)">Open to requeue</span></td>';
     }
@@ -652,7 +749,7 @@
       case "processing":
         return '<tr ' + openAttrs + '><td>' + jobCell(row.id, row.jobDisplayName) + '</td>' +
           '<td>' + escapeHtml(row.serverId || "—") + '</td><td>' + timeCell(row.startedAt) + '</td>' +
-          '<td>' + escapeHtml(fmtRunningSince(row.startedAt)) + '</td>' + actionsCell + '</tr>';
+          '<td>' + escapeHtml(fmtRunningSince(row.startedAt)) + '</td>' + beatCell(row.beat) + processingActionsCell(row) + '</tr>';
       case "scheduled":
         return '<tr ' + openAttrs + '><td>' + jobCell(row.id, row.jobDisplayName) + '</td><td>' + timeCell(row.enqueueAt) + '</td>' + actionsCell + '</tr>';
       case "succeeded":
@@ -671,10 +768,50 @@
     }
   }
 
+  // Liveness beat for a Processing row (null for any job without a [Heartbeat] contract — the "—"
+  // keeps legacy rows visually unchanged). `overdue` is the API's wall-clock display hint that a beat
+  // is late the moment it happens; `stalled` is the detector's authoritative verdict (confirmed on its
+  // own observation clock) and outranks the hint in this cell.
+  function beatCell(beat) {
+    if (!beat) return '<td><span style="color:var(--text-tertiary)">—</span></td>';
+    var html = '<td>';
+    var pctText = "";
+    if (beat.percent != null) {
+      var pct = Math.max(0, Math.min(100, beat.percent));
+      pctText = Math.round(pct) + "% · ";
+      html += '<div class="beat-bar-track"><div class="beat-bar-fill" style="width:' + pct + '%' + (beat.stalled ? ';background:var(--danger-text)' : '') + '"></div></div>';
+    }
+    if (beat.message) {
+      html += '<div class="beat-message" title="' + escapeAttr(beat.message) + '">' + escapeHtml(beat.message) + '</div>';
+    }
+    if (beat.stalled) {
+      html += '<div class="beat-meta"><span class="pill pill-danger">' + icon("error", 12) + 'Stalled</span>' +
+        (beat.acknowledged ? '<span class="pill pill-neutral" style="margin-left:6px">Acknowledged</span>' : '') +
+        ' <span class="beat-overdue" style="color:var(--danger-text)">last beat ' + escapeHtml(fmtRel(beat.lastBeatAt) || "") + '</span></div>';
+    } else {
+      html += '<div class="beat-meta">' + (beat.overdue
+        ? '<span class="beat-overdue">beat overdue — last ' + escapeHtml(fmtRel(beat.lastBeatAt) || "") + '</span>'
+        : escapeHtml(pctText + "beat " + (fmtRel(beat.lastBeatAt) || ""))) + '</div>';
+    }
+    return html + '</td>';
+  }
+
+  // stallPhase is the §5 retry workflow's verdict for a stall-cancelled row: "blocked" (no ack — the
+  // body's fate is unknowable, requeue is guarded), "exhausted" (acknowledged but the retry budget is
+  // spent), "cancel-requested" (ack still pending). Other phases never show on this tab (the job left
+  // Deleted with them).
   function deletedStatusCell(row) {
     if (!row.cancelled) return '<span class="pill pill-neutral">Deleted</span>';
-    return '<span class="pill pill-warning">' + icon("block", 12) + 'Cancelled</span>' +
-      '<div class="pill-sub">by ' + escapeHtml(row.cancelledBy || "unknown") + ' · ' + escapeHtml(fmtRel(row.cancelledAt) || "") + '</div>';
+    var html = '<span class="pill pill-warning">' + icon("block", 12) + 'Cancelled</span>';
+    if (row.stallPhase === "blocked") {
+      html += ' <span class="pill pill-danger">' + icon("error", 12) + 'Stall blocked</span>';
+    } else if (row.stallPhase === "exhausted") {
+      html += ' <span class="pill pill-danger">' + icon("error", 12) + 'Retries exhausted</span>';
+    } else if (row.stallPhase === "cancel-requested") {
+      html += ' <span class="pill pill-neutral">Awaiting ack</span>';
+    }
+    html += '<div class="pill-sub">by ' + escapeHtml(row.cancelledBy || "unknown") + ' · ' + escapeHtml(fmtRel(row.cancelledAt) || "") + '</div>';
+    return html;
   }
 
   function renderDrawer() {
@@ -738,6 +875,15 @@
     if (REQUEUEABLE_TABS[tab] && tab !== "deleted") buttons += requeueButton(tab, d.id);
     if (DELETABLE_TABS[tab]) buttons += deleteButton(tab, d.id);
     if (tab === "deleted") {
+      // The list row carries the §5 stall phase — an unacknowledged stall-cancel's (cancel-requested or
+      // blocked, OPS-003) only exit is the audited break-glass (the API refuses its ordinary requeue
+      // outright, so offering that button would be a lie).
+      var listRow = tabState("deleted").rows.filter(function (r) { return r.id === d.id; })[0];
+      if (listRow && (listRow.stallPhase === "blocked" || listRow.stallPhase === "cancel-requested")) {
+        buttons += '<button class="btn-ghost-ring" data-action="ask-force-requeue" data-id="' + escapeAttr(d.id) + '" style="color:var(--danger-text)">' +
+          icon("replay", 15) + 'Force requeue</button>';
+        return '<div class="drawer-action-row">' + buttons + '</div>';
+      }
       var marker = parseCancelMarker(d.properties);
       var guard = requeueGuard(marker, state.detailAudit.entries);
       if (guard.disabled) {
@@ -822,15 +968,27 @@
     return html;
   }
 
-  // Requeue/Run now/Delete confirmation — reason is optional for all three (§3.2), unlike Cancel's.
+  // Requeue/Run now/Delete confirmation — reason is optional for those (§3.2), unlike Cancel's.
+  // Acknowledge (a stall acknowledgment, review F8) and Force requeue (the §5 Rule-4 break-glass)
+  // require one: the reason is recorded on the flag / in the audit trail.
   function renderActionModal() {
     var m = state.actionModal;
     var isDelete = m.kind === "delete";
-    var verb = isDelete ? "Delete" : (m.expectedState === "Scheduled" ? "Run now" : "Requeue");
-    var iconName = isDelete ? "delete" : "replay";
-    var iconBg = isDelete ? "var(--danger-bg)" : "var(--info-bg)";
+    var isAcknowledge = m.kind === "acknowledge";
+    var isForceRequeue = m.kind === "force-requeue";
+    var verb = isDelete ? "Delete" : isAcknowledge ? "Acknowledge stall" : isForceRequeue ? "Force requeue"
+      : (m.expectedState === "Scheduled" ? "Run now" : "Requeue");
+    var iconName = isDelete ? "delete" : isAcknowledge ? "checkCircle" : "replay";
+    var iconBg = isDelete || isForceRequeue ? "var(--danger-bg)" : isAcknowledge ? "var(--warning-bg)" : "var(--info-bg)";
     var bodyText;
-    if (isDelete) {
+    if (isForceRequeue) {
+      bodyText = "This job's stall-cancel was <b>never acknowledged</b> — its body's fate is unknowable, and it may " +
+        "still be running. Force-requeuing risks a <b>duplicate execution</b> (and the old body's eventual exit can " +
+        "clobber the new run's state). Recycle the owning worker process first if you can. This action is audited.";
+    } else if (isAcknowledge) {
+      bodyText = "Records that someone is looking at this stalled execution — alerting counts unacknowledged stalls only. " +
+        "The stalled flag itself <b>stays</b> (the heartbeat really is overdue) and retires on its own when beats resume or the run ends.";
+    } else if (isDelete) {
       bodyText = "Removes this run from the " + escapeHtml(m.expectedState) + " list permanently.";
     } else if (m.expectedState === "Succeeded") {
       bodyText = "Re-runs this job from the start. <b>The job already completed once</b> — only requeue if running it again is safe (idempotent).";
@@ -845,11 +1003,17 @@
     html += '<div class="modal-head"><div class="modal-icon" style="background:' + iconBg + '">' + icon(iconName, 22) + '</div>' +
       '<div><h3 class="modal-title">' + escapeHtml(verb) + ' ' + escapeHtml(m.jobId) + '</h3>' +
       '<p class="modal-body-text">' + bodyText + '</p></div></div>';
-    html += '<div style="margin-top:18px"><div class="reason-label">Reason (optional)</div>' +
-      '<textarea id="action-reason-input" class="reason-input" data-action="action-reason-input" rows="2" placeholder="Optional context for the audit trail">' + escapeHtml(state.actionReasonDraft) + '</textarea></div>';
+    var reasonRequired = isAcknowledge || isForceRequeue;
+    html += '<div style="margin-top:18px"><div class="reason-label">Reason ' +
+      (reasonRequired ? '<span style="color:var(--danger-text)">*</span>' : '(optional)') + '</div>' +
+      '<textarea id="action-reason-input" class="reason-input" data-action="action-reason-input" rows="2" placeholder="' +
+      (isForceRequeue ? 'e.g. Worker recycled at 14:02 — safe to re-run'
+        : isAcknowledge ? 'e.g. Investigating — looks like a hung upstream call' : 'Optional context for the audit trail') +
+      '">' + escapeHtml(state.actionReasonDraft) + '</textarea></div>';
     if (state.actionModalError) html += '<div class="modal-error">' + escapeHtml(state.actionModalError) + '</div>';
+    var confirmDisabled = state.actionModalBusy || (reasonRequired && state.actionReasonDraft.trim().length === 0);
     html += '<div class="modal-footer"><button class="btn-text" data-action="close-action-modal">Back</button>' +
-      '<button class="' + (isDelete ? "btn-danger-fill" : "btn-navy-fill") + '" data-action="confirm-action"' + (state.actionModalBusy ? " disabled" : "") + '>' + escapeHtml(verb) + '</button></div>';
+      '<button class="' + (isDelete || isForceRequeue ? "btn-danger-fill" : "btn-navy-fill") + '" data-action="confirm-action"' + (confirmDisabled ? " disabled" : "") + '>' + escapeHtml(verb) + '</button></div>';
     html += '</div></div>';
     return html;
   }
@@ -868,11 +1032,23 @@
       .catch(function (err) { state.statsError = err.message; render(); });
   }
 
+  // Detector health + flags for the Processing tab (degraded hint, stalled badges' companion data).
+  // Loaded alongside the tab rather than per row — the stalled flags themselves ride on each row's beat.
+  function loadStalledInfo() {
+    apiGet("/stalled")
+      .then(function (info) { state.stalledInfo = info; render(); })
+      .catch(function () { /* transient — the next load/poll retries; the hint just lags */ });
+  }
+
   function loadQueues(thenSelect) {
     apiGet("/queues")
       .then(function (queues) {
         state.queues = queues;
         state.queuesError = null;
+        // A queue restored from the URL may no longer exist — fall back rather than filter on it.
+        if (state.selectedQueue && !queues.some(function (q) { return q.name === state.selectedQueue; })) {
+          state.selectedQueue = queues.length > 0 ? queues[0].name : null;
+        }
         if (thenSelect && !state.selectedQueue && queues.length > 0) state.selectedQueue = queues[0].name;
         render();
         if (state.tab === "enqueued") loadTab("enqueued", true);
@@ -890,6 +1066,7 @@
     var t = tabState(tab);
     if (reset) { t.rows = []; t.exhausted = false; t.loadError = null; }
     if (tab === "enqueued" && !state.selectedQueue) return; // queue picker not ready yet
+    if (tab === "processing") loadStalledInfo();
     t.loading = true;
     render();
     var from = t.rows.length;
@@ -993,16 +1170,26 @@
   function confirmAction() {
     var m = state.actionModal;
     var reason = state.actionReasonDraft.trim();
-    var wireAction = m.kind === "delete" ? "delete" : "requeue";
+    // Required for acknowledge and force-requeue — the button is disabled, this is the keyboard path.
+    if ((m.kind === "acknowledge" || m.kind === "force-requeue") && !reason) return;
+    var wireAction = m.kind === "delete" ? "delete" : m.kind === "acknowledge" ? "acknowledge-stall"
+      : m.kind === "force-requeue" ? "force-requeue" : "requeue";
     state.actionModalBusy = true;
     state.actionModalError = null;
     render();
-    apiPost(m.jobId, wireAction, { reason: reason || null, expectedState: m.expectedState })
+    apiPost(m.jobId, wireAction, m.kind === "acknowledge"
+        ? { reason: reason }
+        : { reason: reason || null, expectedState: m.expectedState })
       .then(function () {
         state.actionModal = null;
         state.actionModalBusy = false;
         loadStats();
         loadTab(state.tab, true);
+        if (m.kind === "acknowledge") {
+          // The flag stays; only its acknowledgment state changed — no drawer reset needed.
+          showToast("Stall acknowledged for '" + m.jobId + "'", "checkCircle");
+          return;
+        }
         if (state.detailId === m.jobId) {
           // The job's state (and, for requeue, its cancel marker) just changed — reload rather than
           // patch the drawer in place.
@@ -1061,6 +1248,7 @@
         break;
       case "select-tab":
         state.tab = target.getAttribute("data-tab");
+        syncUrl();
         render();
         if (state.tab !== "enqueued" || state.selectedQueue) loadTab(state.tab, tabState(state.tab).rows.length === 0);
         break;
@@ -1104,6 +1292,26 @@
         render();
         focusReason("action-reason-input");
         break;
+      case "ask-acknowledge":
+        state.actionModal = { kind: "acknowledge", jobId: id, expectedState: null };
+        state.actionReasonDraft = "";
+        state.actionModalError = null;
+        state.modalSettled = false;
+        render();
+        focusReason("action-reason-input");
+        break;
+      case "ask-force-requeue":
+        state.actionModal = { kind: "force-requeue", jobId: id, expectedState: "Deleted" };
+        state.actionReasonDraft = "";
+        state.actionModalError = null;
+        state.modalSettled = false;
+        render();
+        focusReason("action-reason-input");
+        break;
+      case "toggle-stalled-only":
+        state.stalledOnly = !state.stalledOnly;
+        render();
+        break;
       case "ask-delete-run":
         state.actionModal = { kind: "delete", jobId: id, expectedState: target.getAttribute("data-expected-state") };
         state.actionReasonDraft = "";
@@ -1131,6 +1339,7 @@
   document.addEventListener("change", function (event) {
     if (event.target.getAttribute("data-action") === "select-queue") {
       state.selectedQueue = event.target.value;
+      syncUrl();
       loadTab("enqueued", true);
     }
   });
@@ -1147,7 +1356,13 @@
     } else if (action === "action-reason-input") {
       // Reason is optional for requeue/delete — nothing else on screen depends on its content, so no
       // per-keystroke DOM patch is needed beyond capturing the draft (unlike cancel-reason-input above).
+      // Acknowledge and Force requeue are the exceptions: their reasons are required, so their confirm
+      // button tracks the draft.
       state.actionReasonDraft = event.target.value;
+      if (state.actionModal && (state.actionModal.kind === "acknowledge" || state.actionModal.kind === "force-requeue")) {
+        var ackConfirmBtn = document.querySelector('[data-action="confirm-action"]');
+        if (ackConfirmBtn) ackConfirmBtn.disabled = state.actionReasonDraft.trim().length === 0 || state.actionModalBusy;
+      }
     } else if (action === "job-lookup") {
       // No render needed — nothing else on screen depends on the draft; it's read on Enter.
       state.lookupDraft = event.target.value;
@@ -1192,6 +1407,7 @@
   var LIVE_TABS = { enqueued: 1, processing: 1, scheduled: 1 };
   function pollTab(tab) {
     var t = tabState(tab);
+    if (tab === "processing") loadStalledInfo();
     apiGet(tabPath(tab, 0))
       .then(function (rows) {
         if (state.tab !== tab) return;
@@ -1211,8 +1427,12 @@
     if (!t.loading && t.rows.length <= PAGE_SIZE) pollTab(state.tab);
   }, 8000);
 
+  readUrlState();
   loadStats();
   loadQueues(true);
+  // loadQueues only kicks off the Queued tab once the picker is ready — a different tab restored
+  // from the URL loads itself here.
+  if (state.tab !== "enqueued") loadTab(state.tab, true);
 })();
 </script>
 </body>

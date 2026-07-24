@@ -31,4 +31,19 @@ public sealed record JobControlOptions
     /// <c>app.UseHangfireDashboard("/admin/jobs")</c>).
     /// </summary>
     public string DashboardPath { get; init; } = "/hangfire";
+
+    /// <summary>
+    /// The registrar the host declares its recurring jobs through, when it has adopted schedule
+    /// overrides. The override endpoints need it to rebuild each <c>Job</c> from code (the stored
+    /// payload is never trusted) and to answer what the code-default cron is. Null (the default) means
+    /// the host still registers jobs directly — every Feature-1 control keeps working, and the
+    /// override endpoints respond 501 with an explanation instead of being silently absent.
+    /// </summary>
+    public RecurringJobRegistrar? Registrar { get; init; }
+
+    /// <summary>
+    /// Long-running-job liveness configuration (beat throttling, stall-detector scan cadence). Always
+    /// present with defaults — see <see cref="LivenessOptions"/> for why there is no null-means-off gate.
+    /// </summary>
+    public LivenessOptions Liveness { get; init; } = new();
 }
